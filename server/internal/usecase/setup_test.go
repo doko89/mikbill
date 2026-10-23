@@ -41,6 +41,17 @@ func TestKrisKrisEksplisit401(t *testing.T) {
 	}
 }
 
+func TestKrisKrisEksplisitServerError(t *testing.T) {
+	uc, _ := newSetupForKrisKrisTest()
+	inv := &fakeInvoiceClient{batchErr: InvoiceError{Msg: "Terjadi kesalahan pada server.", Status: 500}}
+	uc.SetInvoiceBuilder(func(_, _ string) (InvoiceClient, error) { return inv, nil })
+	err := uc.TestKrisKris("k", "s")
+	var input InputError
+	if !errors.As(err, &input) || input.Msg != "tes koneksi gagal (HTTP 500): Terjadi kesalahan pada server." {
+		t.Fatalf("tes 500 = %v, want pesan memuat HTTP 500", err)
+	}
+}
+
 func TestKrisKrisEksplisitParsial(t *testing.T) {
 	uc, _ := newSetupForKrisKrisTest()
 	uc.SetInvoiceBuilder(func(_, _ string) (InvoiceClient, error) {

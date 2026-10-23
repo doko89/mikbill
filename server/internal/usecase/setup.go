@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"strings"
@@ -303,8 +304,13 @@ func (u *SetupUsecase) TestKrisKris(apiKey, apiSecret string) error {
 	_, err = client.BatchStatus(ctx, []string{"uji-koneksi-mikbil"})
 	if err != nil {
 		var invErr InvoiceError
-		if errors.As(err, &invErr) && invErr.Status == 401 {
-			return InputError{"API key atau secret salah (401)"}
+		if errors.As(err, &invErr) {
+			if invErr.Status == 401 {
+				return InputError{"API key atau secret salah (401)"}
+			}
+			if invErr.Status > 0 {
+				return InputError{fmt.Sprintf("tes koneksi gagal (HTTP %d): %s", invErr.Status, shortErr(err))}
+			}
 		}
 		return InputError{"tes koneksi gagal: " + shortErr(err)}
 	}
