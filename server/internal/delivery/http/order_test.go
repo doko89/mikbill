@@ -24,12 +24,16 @@ import (
 type stubInvoice struct {
 	mu        sync.Mutex
 	createOut usecase.InvoiceInfo
+	createErr error
 	batchOut  []usecase.InvoiceStatusInfo
 	batchErr  error
 	cancelled []string
 }
 
 func (s *stubInvoice) CreateInvoice(_ context.Context, _ int, _ string) (usecase.InvoiceInfo, error) {
+	if s.createErr != nil {
+		return usecase.InvoiceInfo{}, s.createErr
+	}
 	return s.createOut, nil
 }
 
@@ -291,12 +295,14 @@ func TestWebhookExpiredTanpaVoucher(t *testing.T) {
 
 func TestSetupKrisKrisTestNyata(t *testing.T) {
 	st := newOrderStack(t)
-	st.stub.batchOut = []usecase.InvoiceStatusInfo{{ID: "uji-koneksi-mikbil", Found: false}}
 	rec := doRequest(t, st.handler, "POST", "/api/setup/kriskris/test", map[string]string{}, nil)
 	if rec.Code != 200 {
 		t.Fatalf("kriskris/test = %d (%s), want 200", rec.Code, rec.Body.String())
 	}
-	st.stub.batchErr = usecase.InvoiceError{Msg: "salah", Status: 401}
+	if len(st.stub.cancelled) != 1 || st.stub.cancelled[0] != "inv_http1" {
+		t.Fatalf("cancelled = %v, want invoice tes dibatalkan", st.stub.cancelled)
+	}
+	st.stub.createErr = usecase.InvoiceError{Msg: "salah", Status: 401}
 	rec = doRequest(t, st.handler, "POST", "/api/setup/kriskris/test", map[string]string{}, nil)
 	if rec.Code != 400 {
 		t.Fatalf("401 = %d, want 400", rec.Code)
