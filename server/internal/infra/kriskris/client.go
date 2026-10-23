@@ -327,7 +327,9 @@ func (c *Client) BatchStatus(ctx context.Context, ids []string) ([]InvoiceStatus
 }
 
 // CancelInvoice membatalkan invoice yang masih pending.
+// Body harus kosong: server menghitung hash body kosong saat verifikasi
+// signature (body `{}` ditolak 401).
 func (c *Client) CancelInvoice(ctx context.Context, id string) error {
-	_, _, err := c.do(ctx, http.MethodPost, pathInvoices+"/"+id+"/cancel", "", map[string]any{})
+	_, _, err := c.do(ctx, http.MethodPost, pathInvoices+"/"+id+"/cancel", "", nil)
 	return err
 }

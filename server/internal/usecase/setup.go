@@ -271,8 +271,9 @@ func (u *SetupUsecase) SaveKrisKris(in SaveKrisKrisInput) error {
 	return nil
 }
 
-// TestKrisKris memvalidasi kredensial via batch status id dummy:
-// sukses bila dapat respons envelope valid (bukan 401).
+// TestKrisKris memvalidasi kredensial dengan siklus buat-baca-batalkan
+// invoice Rp1.000 asli: lookup id dummy selalu 500 di server KrisKris,
+// sehingga tidak bisa dipakai sebagai probe.
 // Kredensial eksplisit (keduanya wajib) dites tanpa menyimpan;
 // bila kosong, dipakai kredensial tersimpan.
 func (u *SetupUsecase) TestKrisKris(apiKey, apiSecret string) error {
@@ -299,53 +300,33 @@ func (u *SetupUsecase) TestKrisKris(apiKey, apiSecret string) error {
 			return err
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_, err = client.BatchStatus(ctx, []string{probeInvoiceID})
-	if err == nil {
-		return nil
+	inv, err := client.CreateInvoice(ctx, 1000, "Mikbil tes koneksi")
+	if err != nil {
+		return testErr(err)
 	}
-	var invErr InvoiceError
-	if !errors.As(err, &invErr) {
-		return InputError{"tes koneksi gagal: " + shortErr(err)}
+	if _, err := client.GetInvoice(ctx, inv.ID); err != nil {
+		_ = client.CancelInvoice(ctx, inv.ID)
+		return testErr(err)
 	}
-	switch {
-	case invErr.Status == 401:
-		return InputError{"API key atau secret salah (401)"}
-	case invErr.Status >= 500:
-		// Batch 5xx: coba GET satu invoice; 200 maupun 404 sama-sama
-		// membuktikan kredensial valid (404 = auth lolos, id memang asing).
-		return probeGetInvoice(client, ctx)
-	case invErr.Status > 0:
-		return InputError{fmt.Sprintf("tes koneksi gagal (HTTP %d): %s", invErr.Status, shortErr(err))}
-	default:
-		return InputError{"tes koneksi gagal: " + shortErr(err)}
-	}
+	// Pembersihan best-effort; invoice kedaluwarsa sendiri dalam 15 menit.
+	_ = client.CancelInvoice(ctx, inv.ID)
+	return nil
 }
 
-// probeInvoiceID adalah id dummy berbentuk invoice asli untuk tes koneksi.
-const probeInvoiceID = "inv-uji-koneksi"
-
-// probeGetInvoice adalah probe cadangan saat batch status 5xx.
-func probeGetInvoice(client InvoiceClient, ctx context.Context) error {
-	_, err := client.GetInvoice(ctx, probeInvoiceID)
-	if err == nil {
-		return nil
-	}
+// testErr memetakan kegagalan probe ke pesan Indonesia.
+func testErr(err error) error {
 	var invErr InvoiceError
-	if !errors.As(err, &invErr) {
-		return InputError{"tes koneksi gagal: " + shortErr(err)}
+	if errors.As(err, &invErr) {
+		if invErr.Status == 401 {
+			return InputError{"API key atau secret salah (401)"}
+		}
+		if invErr.Status > 0 {
+			return InputError{fmt.Sprintf("tes koneksi gagal (HTTP %d): %s", invErr.Status, shortErr(err))}
+		}
 	}
-	switch {
-	case invErr.Status == 404:
-		return nil
-	case invErr.Status == 401:
-		return InputError{"API key atau secret salah (401)"}
-	case invErr.Status > 0:
-		return InputError{fmt.Sprintf("tes koneksi gagal (HTTP %d): %s", invErr.Status, shortErr(err))}
-	default:
-		return InputError{"tes koneksi gagal: " + shortErr(err)}
-	}
+	return InputError{"tes koneksi gagal: " + shortErr(err)}
 }
 
 // Provision menjalankan provisioning router, hasil per langkah.

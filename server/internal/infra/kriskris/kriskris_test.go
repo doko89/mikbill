@@ -120,6 +120,9 @@ func TestClientCreateGetBatchCancel(t *testing.T) {
 				"paid_at": "2026-10-23T10:05:00Z",
 			}})
 		case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/cancel"):
+			if r.ContentLength != 0 {
+				t.Errorf("cancel Content-Length = %d, want body kosong", r.ContentLength)
+			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true,
 				"data": map[string]any{"id": "inv_1", "status": "cancelled"}})
 		default:

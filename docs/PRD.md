@@ -86,7 +86,7 @@ Multi-tenant \& multi-router/lokasi (diputuskan: single-tenant), multi-user admi
 1. Langkah 1 — Akun admin: nama, username, password (konfirmasi). Validasi kekuatan minimal.
 2. Langkah 2 — Alamat Mikbil: pilih mode **VPS** (`https://wifi.contoh.com`, wajib HTTPS publik) atau **server lokal** (`http://mikbil.lan`, IP LAN server + nama domain lokal). Alamat ini dipakai untuk link tombol "Beli Voucher", redirect login, dan callback URL default (`<alamat>/api/webhooks/kriskris`; catatan: webhook KrisKris hanya sampai pada mode VPS — mode lokal mengandalkan polling penuh, lihat §7).
 3. Langkah 3 — MikroTik: host, port (default 8728 / 8729 bila TLS), user, password, toggle TLS, tombol **Test koneksi** (wajib sukses sebelum lanjut).
-4. Langkah 4 — KrisKris: API key, API secret, callback secret. Tombol **Test koneksi** (panggil list/status ringan atau buat-batalkan invoice Rp1.000? — dipilih: panggil batch status dengan id dummy untuk validasi signature tanpa efek samping; alternatif tombol "kirim test.ping" dari dashboard KrisKris).
+4. Langkah 4 — KrisKris: API key, API secret, callback secret. Tombol **Test koneksi** (buat-baca-batalkan invoice Rp1.000 asli; lookup id dummy selalu 500 di server KrisKris sehingga tidak dipakai sebagai probe).
 5. Langkah 5 — Provision: tombol **Aktifkan akses** → (a) tambah walled garden (mode VPS: `dst-host` domain publik; mode lokal: `dst-address` IP server + `dst-host` domain lokal), (b) mode lokal: tambah DNS statik (`/ip/dns/static`, domain lokal → IP server), (c) aktifkan `http-pap` pada hotspot server profile (aditif). Tampil ringkasan + tombol **Unduh login.html** + **potongan kode tombol "Beli Voucher"** siap tempel ke `login.html` existing (dengan tombol salin).
 6. Selesai → redirect ke `/admin`.
 
