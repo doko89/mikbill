@@ -62,7 +62,6 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/connection", setup.SaveConnection)
 			r.Post("/connection/test", setup.TestConnection)
 			r.Post("/kriskris", setup.SaveKrisKris)
-			r.Post("/kriskris/test", setup.TestKrisKris)
 			r.Post("/provision", setup.Provision)
 			r.Post("/finish", setup.Finish)
 		})

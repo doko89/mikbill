@@ -155,23 +155,6 @@ export default function Setup() {
     }
   }
 
-  async function testKrisKris() {
-    setBusy(true);
-    setFormError(null);
-    setNotice(null);
-    try {
-      await api("/api/setup/kriskris/test", {
-        method: "POST",
-        body: { api_key: draft.kkKey, api_secret: draft.kkSecret },
-      });
-      setNotice("Kredensial KrisKris valid");
-    } catch (err) {
-      setFormError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function provision() {
     setBusy(true);
     setFormError(null);
@@ -478,9 +461,6 @@ export default function Setup() {
                 Mode server lokal tidak memakai webhook. Status pembayaran dicek otomatis lewat polling tiap 5 detik.
               </p>
             )}
-            <button type="button" className="btn btn-secondary w-full" onClick={testKrisKris} disabled={busy}>
-              Tes koneksi
-            </button>
           </div>
         )}
 

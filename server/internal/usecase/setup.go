@@ -1,38 +1,23 @@
 package usecase
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"net"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/mikbil/mikbil/internal/domain"
 )
 
 // SetupUsecase menangani wizard penyiapan awal (first-run).
 type SetupUsecase struct {
-	admins   AdminRepository
-	conns    ConnectionRepository
-	set      SettingsRepository
-	hash     PasswordHasher
-	box      SecretBox
-	router   *ConnectionUsecase
-	prov     *ProvisioningUsecase
-	invoices InvoiceClientFactory
-	builder  InvoiceClientBuilder
-}
-
-// SetInvoiceFactory memasang pabrik client KrisKris (diisi main saat serve).
-func (u *SetupUsecase) SetInvoiceFactory(f InvoiceClientFactory) {
-	u.invoices = f
-}
-
-// SetInvoiceBuilder memasang pembangun client dari kredensial eksplisit.
-func (u *SetupUsecase) SetInvoiceBuilder(b InvoiceClientBuilder) {
-	u.builder = b
+	admins AdminRepository
+	conns  ConnectionRepository
+	set    SettingsRepository
+	hash   PasswordHasher
+	box    SecretBox
+	router *ConnectionUsecase
+	prov   *ProvisioningUsecase
 }
 
 // NewSetupUsecase membuat SetupUsecase.
@@ -269,64 +254,6 @@ func (u *SetupUsecase) SaveKrisKris(in SaveKrisKrisInput) error {
 		}
 	}
 	return nil
-}
-
-// TestKrisKris memvalidasi kredensial dengan siklus buat-baca-batalkan
-// invoice Rp1.000 asli: lookup id dummy selalu 500 di server KrisKris,
-// sehingga tidak bisa dipakai sebagai probe.
-// Kredensial eksplisit (keduanya wajib) dites tanpa menyimpan;
-// bila kosong, dipakai kredensial tersimpan.
-func (u *SetupUsecase) TestKrisKris(apiKey, apiSecret string) error {
-	var client InvoiceClient
-	var err error
-	switch {
-	case apiKey != "" || apiSecret != "":
-		if apiKey == "" || apiSecret == "" {
-			return InputError{"API key dan API secret wajib diisi untuk tes"}
-		}
-		if u.builder == nil {
-			return NotImplementedError{"tes koneksi KrisKris tersedia mulai fase 4"}
-		}
-		client, err = u.builder(apiKey, apiSecret)
-		if err != nil {
-			return err
-		}
-	default:
-		if u.invoices == nil {
-			return NotImplementedError{"tes koneksi KrisKris tersedia mulai fase 4"}
-		}
-		client, err = u.invoices()
-		if err != nil {
-			return err
-		}
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	inv, err := client.CreateInvoice(ctx, 1000, "Mikbil tes koneksi")
-	if err != nil {
-		return testErr(err)
-	}
-	if _, err := client.GetInvoice(ctx, inv.ID); err != nil {
-		_ = client.CancelInvoice(ctx, inv.ID)
-		return testErr(err)
-	}
-	// Pembersihan best-effort; invoice kedaluwarsa sendiri dalam 15 menit.
-	_ = client.CancelInvoice(ctx, inv.ID)
-	return nil
-}
-
-// testErr memetakan kegagalan probe ke pesan Indonesia.
-func testErr(err error) error {
-	var invErr InvoiceError
-	if errors.As(err, &invErr) {
-		if invErr.Status == 401 {
-			return InputError{"API key atau secret salah (401)"}
-		}
-		if invErr.Status > 0 {
-			return InputError{fmt.Sprintf("tes koneksi gagal (HTTP %d): %s", invErr.Status, shortErr(err))}
-		}
-	}
-	return InputError{"tes koneksi gagal: " + shortErr(err)}
 }
 
 // Provision menjalankan provisioning router, hasil per langkah.

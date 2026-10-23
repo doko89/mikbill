@@ -185,8 +185,6 @@ func cmdServe() {
 		}
 		return buildInvoice(key, secret)
 	}
-	setup.SetInvoiceFactory(factory)
-	setup.SetInvoiceBuilder(buildInvoice)
 	orderUC := usecase.NewOrderUsecase(orders, vouchers, pkgRepo, set, box, factory)
 	payUC := usecase.NewPaymentUsecase(orders, vouchers, webhooks, audits,
 		pkgRepo, set, box, connUC, factory, kriskris.VerifyWebhook)

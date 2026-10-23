@@ -142,10 +142,6 @@ type InvoiceClient interface {
 // InvoiceClientFactory membuat InvoiceClient dari settings saat dipakai.
 type InvoiceClientFactory func() (InvoiceClient, error)
 
-// InvoiceClientBuilder membuat InvoiceClient dari kredensial eksplisit
-// (untuk tes koneksi tanpa menyimpan).
-type InvoiceClientBuilder func(key, secret string) (InvoiceClient, error)
-
 // SecretBox port enkripsi nilai rahasia.
 type SecretBox interface {
 	Seal(plaintext string) (string, error)

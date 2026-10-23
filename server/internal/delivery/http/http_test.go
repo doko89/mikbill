@@ -178,15 +178,6 @@ func TestSetupFlowLengkap(t *testing.T) {
 		t.Fatalf("simpan kriskris = %d (%s), want 200", rec.Code, rec.Body.String())
 	}
 
-	// Stub fase 4: 501 berenvelope.
-	rec = doRequest(t, h, "POST", "/api/setup/kriskris/test", map[string]string{}, nil)
-	if rec.Code != 501 {
-		t.Fatalf("kriskris/test = %d, want 501", rec.Code)
-	}
-	if e := mustEnvelope(t, rec); e.OK || e.Code != "not_implemented" {
-		t.Fatalf("kriskris/test envelope = %+v, want gagal + code", e)
-	}
-
 	// Tes koneksi router nyata (gateway palsu): mencatat hasil ke koneksi tersimpan.
 	rec = doRequest(t, h, "POST", "/api/setup/connection/test", map[string]any{
 		"host": "192.168.88.1", "username": "admin", "password": "rahasia", "use_tls": false,

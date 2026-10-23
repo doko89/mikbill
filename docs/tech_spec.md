@@ -190,7 +190,6 @@ Aturan `POST /api/orders`:
 | `POST /api/setup/connection {host,port,username,password,use_tls}` | Simpan koneksi router (password dienkripsi) |
 | `POST /api/setup/connection/test` | Test koneksi tanpa simpan |
 | `POST /api/setup/kriskris {api_key, api_secret, callback_secret}` | Simpan kredensial (secret dienkripsi) |
-| `POST /api/setup/kriskris/test` | Validasi signature via batch status id dummy (harus dapat respons envelope valid, bukan 401) |
 | `POST /api/setup/provision` | Jalankan provisioning (§8.3), kembalikan ringkasan hasil per langkah |
 | `POST /api/setup/finish` | Set `setup_completed=1` (wajib: admin ada + test router OK) |
 
@@ -254,8 +253,7 @@ Operasi client (`infra/kriskris/client.go`):
 - `CancelInvoice(ctx, id)`
 - Catatan: `code`/`retry_after` gagal dibaca dari objek `data` (fallback ke top-level),
   sesuai panduan kriskris.id. Cancel memakai body kosong (body `{}` ditolak 401).
-  Tes koneksi memakai siklus buat-baca-batalkan invoice Rp1.000 asli; lookup id
-  dummy selalu 500 di server sehingga tidak dipakai sebagai probe.
+  Tidak ada tes koneksi KrisKris (lookup id dummy selalu 500 di server).
 
 Poller (`usecase/payment.go` + worker di `main.go`):
 - Ticker 5 detik. Ambil order `pending` yang belum expired (maks 50 per siklus, batch status 1 request).
