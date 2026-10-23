@@ -8,7 +8,7 @@ import {
   Trash,
 } from "@phosphor-icons/react";
 import { ApiError, api } from "../../lib/api";
-import { durasiMikrotik, rupiah } from "../../lib/format";
+import { durasiMikrotik, parseDurasiMikrotik, rupiah } from "../../lib/format";
 import { Field, FormError, PageSkeleton, TextInput } from "../../components/ui";
 
 type Paket = {
@@ -54,6 +54,18 @@ function errMsg(err: unknown): string {
 function masaAktifProfile(profiles: Profile[], name: string): string {
   const terpilih = profiles.find((p) => p.name === name);
   return terpilih ? durasiMikrotik(terpilih.session_timeout) : "tidak diketahui";
+}
+
+function TimeoutPreview({ value }: { value: string }) {
+  const parsed = parseDurasiMikrotik(value);
+  if (parsed === null) {
+    return (
+      <p className="field-error" role="alert">
+        Format tidak valid
+      </p>
+    );
+  }
+  return <p className="hint">= {durasiMikrotik(parsed)}</p>;
 }
 
 export default function Packages() {
@@ -147,6 +159,21 @@ export default function Packages() {
   }
 
   async function save() {
+    let timeout: number;
+    if (form.profileMode === "baru") {
+      if (form.timeout.trim() === "") {
+        timeout = 0;
+      } else {
+        const parsed = parseDurasiMikrotik(form.timeout);
+        if (parsed === null) {
+          setFormError("Batas sesi tidak valid. Contoh: 12h, 7d, 1d12h, atau kosongkan.");
+          return;
+        }
+        timeout = parsed;
+      }
+    } else {
+      timeout = form.timeout === "" ? 0 : Number(form.timeout);
+    }
     setBusy(true);
     setFormError(null);
     setNotice(null);
@@ -158,7 +185,7 @@ export default function Packages() {
         validity_label: form.validityLabel,
         profile_name: form.profileName,
         rate_limit: form.rateLimit,
-        session_timeout: form.timeout === "" ? 0 : Number(form.timeout),
+        session_timeout: timeout,
         shared_users: form.shared === "" ? 1 : Number(form.shared),
         is_active: form.isActive,
         sort_order: form.sortOrder === "" ? 0 : Number(form.sortOrder),
@@ -402,15 +429,20 @@ export default function Packages() {
                     onChange={(e) => set("rateLimit", e.target.value)}
                   />
                 </Field>
-                <Field label="Batas sesi (detik)" name="timeout" hint="0 berarti tanpa batas">
+                <Field
+                  label="Batas sesi"
+                  name="timeout"
+                  hint="Format MikroTik: 12h, 7d, 1d12h. Kosongkan bila tanpa batas."
+                >
                   <TextInput
                     id="timeout"
                     name="timeout"
                     value={form.timeout}
-                    inputMode="numeric"
-                    placeholder="0"
+                    autoComplete="off"
+                    placeholder="12h"
                     onChange={(e) => set("timeout", e.target.value)}
                   />
+                  {form.timeout.trim() !== "" && <TimeoutPreview value={form.timeout} />}
                 </Field>
                 <Field label="Shared users" name="shared">
                   <TextInput
