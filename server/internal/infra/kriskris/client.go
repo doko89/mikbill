@@ -183,9 +183,24 @@ func (c *Client) do(ctx context.Context, method, path, rawQuery string, payload 
 		if msg == "" {
 			msg = "request gagal"
 		}
+		code, retryAfter := env.Code, env.RetryAfter
+		if (code == "" || retryAfter == 0) && len(env.Data) > 0 {
+			var detail struct {
+				Code       string `json:"code"`
+				RetryAfter int    `json:"retry_after"`
+			}
+			if json.Unmarshal(env.Data, &detail) == nil {
+				if code == "" {
+					code = detail.Code
+				}
+				if retryAfter == 0 {
+					retryAfter = detail.RetryAfter
+				}
+			}
+		}
 		return nil, nil, &APIError{
-			StatusCode: resp.StatusCode, Code: env.Code,
-			Message: msg, RetryAfter: env.RetryAfter,
+			StatusCode: resp.StatusCode, Code: code,
+			Message: msg, RetryAfter: retryAfter,
 		}
 	}
 	return env.Data, resp.Header, nil

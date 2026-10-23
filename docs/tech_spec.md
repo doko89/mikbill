@@ -252,6 +252,9 @@ Operasi client (`infra/kriskris/client.go`):
 - `GetInvoice(ctx, id) → Invoice`
 - `BatchStatus(ctx, ids[≤50]) → []InvoiceStatus`
 - `CancelInvoice(ctx, id)`
+- Catatan: `code`/`retry_after` gagal dibaca dari objek `data` (fallback ke top-level),
+  sesuai panduan kriskris.id. Tes koneksi memakai batch id dummy `inv-uji-koneksi`;
+  bila batch 5xx, fallback ke GET (200/404 = kredensial valid).
 
 Poller (`usecase/payment.go` + worker di `main.go`):
 - Ticker 5 detik. Ambil order `pending` yang belum expired (maks 50 per siklus, batch status 1 request).

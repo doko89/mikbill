@@ -43,12 +43,34 @@ func TestKrisKrisEksplisit401(t *testing.T) {
 
 func TestKrisKrisEksplisitServerError(t *testing.T) {
 	uc, _ := newSetupForKrisKrisTest()
-	inv := &fakeInvoiceClient{batchErr: InvoiceError{Msg: "Terjadi kesalahan pada server.", Status: 500}}
+	inv := &fakeInvoiceClient{
+		batchErr: InvoiceError{Msg: "Terjadi kesalahan pada server.", Status: 500},
+		getErr:   InvoiceError{Msg: "Terjadi kesalahan pada server.", Status: 500},
+	}
 	uc.SetInvoiceBuilder(func(_, _ string) (InvoiceClient, error) { return inv, nil })
 	err := uc.TestKrisKris("k", "s")
 	var input InputError
 	if !errors.As(err, &input) || input.Msg != "tes koneksi gagal (HTTP 500): Terjadi kesalahan pada server." {
 		t.Fatalf("tes 500 = %v, want pesan memuat HTTP 500", err)
+	}
+}
+
+func TestKrisKrisFallbackGetSaatBatch500(t *testing.T) {
+	uc, _ := newSetupForKrisKrisTest()
+	// Batch 500 + GET 404 = kredensial valid (auth lolos, id asing).
+	inv := &fakeInvoiceClient{
+		batchErr: InvoiceError{Msg: "rusak", Status: 500},
+		getErr:   InvoiceError{Msg: "bukan milik key", Status: 404},
+	}
+	uc.SetInvoiceBuilder(func(_, _ string) (InvoiceClient, error) { return inv, nil })
+	if err := uc.TestKrisKris("k", "s"); err != nil {
+		t.Fatalf("fallback 404 = %v, want sukses", err)
+	}
+	// Batch 500 + GET 200 = kredensial valid.
+	inv2 := &fakeInvoiceClient{batchErr: InvoiceError{Msg: "rusak", Status: 500}}
+	uc.SetInvoiceBuilder(func(_, _ string) (InvoiceClient, error) { return inv2, nil })
+	if err := uc.TestKrisKris("k", "s"); err != nil {
+		t.Fatalf("fallback 200 = %v, want sukses", err)
 	}
 }
 

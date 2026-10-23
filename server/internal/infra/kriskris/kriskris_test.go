@@ -175,22 +175,33 @@ func TestClientErrorEnvelope(t *testing.T) {
 	}
 	ctx := context.Background()
 
+	// Bentuk asli API: code/retry_after di dalam data (lihat panduan).
 	_, c := newSrv(422, map[string]any{
-		"ok": false, "error": "kode habis", "code": "duplicate_pending",
+		"ok": false, "error": "kode habis", "data": map[string]any{"code": "duplicate_pending"},
 	})
 	_, err := c.CreateInvoice(ctx, 15000, "x")
 	apiErr, ok := err.(*APIError)
 	if !ok || apiErr.Code != "duplicate_pending" {
-		t.Fatalf("err = %v, want duplicate_pending", err)
+		t.Fatalf("err = %v, want duplicate_pending dari data", err)
 	}
 
 	_, c = newSrv(429, map[string]any{
-		"ok": false, "error": "batas laju", "code": "rate_limited", "retry_after": 7,
+		"ok": false, "error": "batas laju", "data": map[string]any{"retry_after": 7},
 	})
 	_, err = c.CreateInvoice(ctx, 15000, "x")
 	apiErr, ok = err.(*APIError)
 	if !ok || apiErr.RetryAfter != 7 {
-		t.Fatalf("err = %v, want retry_after 7", err)
+		t.Fatalf("err = %v, want retry_after 7 dari data", err)
+	}
+
+	// Fallback: varian top-level tetap dibaca.
+	_, c = newSrv(422, map[string]any{
+		"ok": false, "error": "kode habis", "code": "duplicate_pending",
+	})
+	_, err = c.CreateInvoice(ctx, 15000, "x")
+	apiErr, ok = err.(*APIError)
+	if !ok || apiErr.Code != "duplicate_pending" {
+		t.Fatalf("err = %v, want duplicate_pending top-level", err)
 	}
 
 	_, c = newSrv(401, map[string]any{"ok": false, "error": "kunci salah"})

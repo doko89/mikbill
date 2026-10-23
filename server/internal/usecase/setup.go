@@ -301,20 +301,51 @@ func (u *SetupUsecase) TestKrisKris(apiKey, apiSecret string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_, err = client.BatchStatus(ctx, []string{"uji-koneksi-mikbil"})
-	if err != nil {
-		var invErr InvoiceError
-		if errors.As(err, &invErr) {
-			if invErr.Status == 401 {
-				return InputError{"API key atau secret salah (401)"}
-			}
-			if invErr.Status > 0 {
-				return InputError{fmt.Sprintf("tes koneksi gagal (HTTP %d): %s", invErr.Status, shortErr(err))}
-			}
-		}
+	_, err = client.BatchStatus(ctx, []string{probeInvoiceID})
+	if err == nil {
+		return nil
+	}
+	var invErr InvoiceError
+	if !errors.As(err, &invErr) {
 		return InputError{"tes koneksi gagal: " + shortErr(err)}
 	}
-	return nil
+	switch {
+	case invErr.Status == 401:
+		return InputError{"API key atau secret salah (401)"}
+	case invErr.Status >= 500:
+		// Batch 5xx: coba GET satu invoice; 200 maupun 404 sama-sama
+		// membuktikan kredensial valid (404 = auth lolos, id memang asing).
+		return probeGetInvoice(client, ctx)
+	case invErr.Status > 0:
+		return InputError{fmt.Sprintf("tes koneksi gagal (HTTP %d): %s", invErr.Status, shortErr(err))}
+	default:
+		return InputError{"tes koneksi gagal: " + shortErr(err)}
+	}
+}
+
+// probeInvoiceID adalah id dummy berbentuk invoice asli untuk tes koneksi.
+const probeInvoiceID = "inv-uji-koneksi"
+
+// probeGetInvoice adalah probe cadangan saat batch status 5xx.
+func probeGetInvoice(client InvoiceClient, ctx context.Context) error {
+	_, err := client.GetInvoice(ctx, probeInvoiceID)
+	if err == nil {
+		return nil
+	}
+	var invErr InvoiceError
+	if !errors.As(err, &invErr) {
+		return InputError{"tes koneksi gagal: " + shortErr(err)}
+	}
+	switch {
+	case invErr.Status == 404:
+		return nil
+	case invErr.Status == 401:
+		return InputError{"API key atau secret salah (401)"}
+	case invErr.Status > 0:
+		return InputError{fmt.Sprintf("tes koneksi gagal (HTTP %d): %s", invErr.Status, shortErr(err))}
+	default:
+		return InputError{"tes koneksi gagal: " + shortErr(err)}
+	}
 }
 
 // Provision menjalankan provisioning router, hasil per langkah.
