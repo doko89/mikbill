@@ -158,9 +158,21 @@ func (h *SetupHandler) SaveKrisKris(w http.ResponseWriter, r *http.Request) {
 	WriteOK(w, http.StatusOK, map[string]bool{"saved": true})
 }
 
+type testKrisKrisBody struct {
+	APIKey    string `json:"api_key"`
+	APISecret string `json:"api_secret"`
+}
+
 // TestKrisKris menangani POST /api/setup/kriskris/test.
+// Body opsional {api_key, api_secret} dites tanpa menyimpan.
 func (h *SetupHandler) TestKrisKris(w http.ResponseWriter, r *http.Request) {
-	if err := h.setup.TestKrisKris(); err != nil {
+	var b testKrisKrisBody
+	if r.ContentLength != 0 {
+		if !decodeJSON(w, r, &b) {
+			return
+		}
+	}
+	if err := h.setup.TestKrisKris(b.APIKey, b.APISecret); err != nil {
 		writeUsecaseErr(w, err)
 		return
 	}

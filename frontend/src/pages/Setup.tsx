@@ -160,7 +160,10 @@ export default function Setup() {
     setFormError(null);
     setNotice(null);
     try {
-      await api("/api/setup/kriskris/test", { method: "POST" });
+      await api("/api/setup/kriskris/test", {
+        method: "POST",
+        body: { api_key: draft.kkKey, api_secret: draft.kkSecret },
+      });
       setNotice("Kredensial KrisKris valid");
     } catch (err) {
       setFormError(errorMessage(err));

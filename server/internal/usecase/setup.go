@@ -21,11 +21,17 @@ type SetupUsecase struct {
 	router   *ConnectionUsecase
 	prov     *ProvisioningUsecase
 	invoices InvoiceClientFactory
+	builder  InvoiceClientBuilder
 }
 
 // SetInvoiceFactory memasang pabrik client KrisKris (diisi main saat serve).
 func (u *SetupUsecase) SetInvoiceFactory(f InvoiceClientFactory) {
 	u.invoices = f
+}
+
+// SetInvoiceBuilder memasang pembangun client dari kredensial eksplisit.
+func (u *SetupUsecase) SetInvoiceBuilder(b InvoiceClientBuilder) {
+	u.builder = b
 }
 
 // NewSetupUsecase membuat SetupUsecase.
@@ -266,13 +272,31 @@ func (u *SetupUsecase) SaveKrisKris(in SaveKrisKrisInput) error {
 
 // TestKrisKris memvalidasi kredensial via batch status id dummy:
 // sukses bila dapat respons envelope valid (bukan 401).
-func (u *SetupUsecase) TestKrisKris() error {
-	if u.invoices == nil {
-		return NotImplementedError{"tes koneksi KrisKris tersedia mulai fase 4"}
-	}
-	client, err := u.invoices()
-	if err != nil {
-		return err
+// Kredensial eksplisit (keduanya wajib) dites tanpa menyimpan;
+// bila kosong, dipakai kredensial tersimpan.
+func (u *SetupUsecase) TestKrisKris(apiKey, apiSecret string) error {
+	var client InvoiceClient
+	var err error
+	switch {
+	case apiKey != "" || apiSecret != "":
+		if apiKey == "" || apiSecret == "" {
+			return InputError{"API key dan API secret wajib diisi untuk tes"}
+		}
+		if u.builder == nil {
+			return NotImplementedError{"tes koneksi KrisKris tersedia mulai fase 4"}
+		}
+		client, err = u.builder(apiKey, apiSecret)
+		if err != nil {
+			return err
+		}
+	default:
+		if u.invoices == nil {
+			return NotImplementedError{"tes koneksi KrisKris tersedia mulai fase 4"}
+		}
+		client, err = u.invoices()
+		if err != nil {
+			return err
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

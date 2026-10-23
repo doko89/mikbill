@@ -163,6 +163,13 @@ func cmdServe() {
 	pkgUC := usecase.NewPackageUsecase(pkgRepo, profUC)
 
 	skewRec := &kriskris.SkewRecorder{}
+	buildInvoice := func(key, secret string) (usecase.InvoiceClient, error) {
+		return invoiceAdapter{c: &kriskris.Client{
+			APIKey: key, APISecret: secret,
+			HTTP:   &http.Client{Timeout: 10 * time.Second},
+			Shared: skewRec,
+		}}, nil
+	}
 	factory := func() (usecase.InvoiceClient, error) {
 		key, found, err := set.Get(domain.SettingKrisKrisAPIKey)
 		if err != nil || !found || key == "" {
@@ -176,13 +183,10 @@ func cmdServe() {
 		if err != nil {
 			return nil, err
 		}
-		return invoiceAdapter{c: &kriskris.Client{
-			APIKey: key, APISecret: secret,
-			HTTP:   &http.Client{Timeout: 10 * time.Second},
-			Shared: skewRec,
-		}}, nil
+		return buildInvoice(key, secret)
 	}
 	setup.SetInvoiceFactory(factory)
+	setup.SetInvoiceBuilder(buildInvoice)
 	orderUC := usecase.NewOrderUsecase(orders, vouchers, pkgRepo, set, box, factory)
 	payUC := usecase.NewPaymentUsecase(orders, vouchers, webhooks, audits,
 		pkgRepo, set, box, connUC, factory, kriskris.VerifyWebhook)
