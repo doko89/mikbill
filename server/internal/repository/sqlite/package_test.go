@@ -10,7 +10,7 @@ import (
 func samplePackage(name string, active bool, sort int) domain.Package {
 	return domain.Package{
 		Name: name, Description: "desc " + name, PriceIDR: 5000,
-		ValiditySecs: 43200, ValidityLabel: "12 Jam", ProfileName: "prof-" + name,
+		ValidityLabel: "12 Jam", ProfileName: "prof-" + name,
 		RateLimit: "5M/10M", SessionTimeout: 0, SharedUsers: 1,
 		IsActive: active, SortOrder: sort,
 	}

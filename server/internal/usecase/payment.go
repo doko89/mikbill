@@ -184,10 +184,10 @@ func (u *PaymentUsecase) ProcessPaidOrder(orderID string) error {
 		return u.fail(orderID, "router: "+shortErr(err))
 	}
 	if !found {
+		// Tanpa limit-uptime: masa aktif mengikuti session-timeout profile di router.
 		err = sess.AddHotspotUser(domain.HotspotUser{
 			Name: code, Password: code, Profile: p.ProfileName,
-			LimitUptime: domain.FormatLimitUptime(int64(p.ValiditySecs)),
-			Comment:     comment,
+			Comment: comment,
 		})
 		if err != nil {
 			return u.fail(orderID, "router: "+shortErr(err))

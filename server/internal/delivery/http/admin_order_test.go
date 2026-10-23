@@ -47,7 +47,7 @@ func newAdminOrderStack(t *testing.T) adminOrderStack {
 
 	_ = set.Set(domain.SettingHotspotLoginBase, "http://192.168.88.1/login")
 	pkg, err := pkgRepo.Create(domain.Package{
-		Name: "Harian", PriceIDR: 15000, ValiditySecs: 43200,
+		Name: "Harian", PriceIDR: 15000,
 		ValidityLabel: "12 Jam", ProfileName: "default", IsActive: true,
 	})
 	if err != nil {

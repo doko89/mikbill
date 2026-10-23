@@ -12,7 +12,7 @@ type PackageRepo struct{ db *sql.DB }
 // NewPackageRepo membuat PackageRepo.
 func NewPackageRepo(db *sql.DB) *PackageRepo { return &PackageRepo{db: db} }
 
-const packageColumns = `id, name, description, price_idr, validity_seconds, validity_label,
+const packageColumns = `id, name, description, price_idr, validity_label,
 	profile_name, rate_limit, session_timeout, shared_users, is_active, sort_order,
 	created_at, updated_at`
 
@@ -21,7 +21,7 @@ func scanPackage(row interface {
 }, p *domain.Package) error {
 	var isActive int
 	var created, updated string
-	err := row.Scan(&p.ID, &p.Name, &p.Description, &p.PriceIDR, &p.ValiditySecs,
+	err := row.Scan(&p.ID, &p.Name, &p.Description, &p.PriceIDR,
 		&p.ValidityLabel, &p.ProfileName, &p.RateLimit, &p.SessionTimeout,
 		&p.SharedUsers, &isActive, &p.SortOrder, &created, &updated)
 	if err != nil {
@@ -91,10 +91,10 @@ func boolInt(b bool) int {
 // Create menyimpan paket baru.
 func (r *PackageRepo) Create(p domain.Package) (domain.Package, error) {
 	res, err := r.db.Exec(
-		`INSERT INTO packages (name, description, price_idr, validity_seconds, validity_label,
+		`INSERT INTO packages (name, description, price_idr, validity_label,
 		  profile_name, rate_limit, session_timeout, shared_users, is_active, sort_order)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.Name, p.Description, p.PriceIDR, p.ValiditySecs, p.ValidityLabel,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.Name, p.Description, p.PriceIDR, p.ValidityLabel,
 		p.ProfileName, p.RateLimit, p.SessionTimeout, p.SharedUsers,
 		boolInt(p.IsActive), p.SortOrder,
 	)
@@ -112,11 +112,11 @@ func (r *PackageRepo) Create(p domain.Package) (domain.Package, error) {
 func (r *PackageRepo) Update(p domain.Package) (domain.Package, error) {
 	res, err := r.db.Exec(
 		`UPDATE packages SET name = ?, description = ?, price_idr = ?,
-		  validity_seconds = ?, validity_label = ?, profile_name = ?, rate_limit = ?,
+		  validity_label = ?, profile_name = ?, rate_limit = ?,
 		  session_timeout = ?, shared_users = ?, is_active = ?, sort_order = ?,
 		  updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 		 WHERE id = ?`,
-		p.Name, p.Description, p.PriceIDR, p.ValiditySecs, p.ValidityLabel,
+		p.Name, p.Description, p.PriceIDR, p.ValidityLabel,
 		p.ProfileName, p.RateLimit, p.SessionTimeout, p.SharedUsers,
 		boolInt(p.IsActive), p.SortOrder, p.ID,
 	)

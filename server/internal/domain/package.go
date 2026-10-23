@@ -8,7 +8,6 @@ type Package struct {
 	Name           string
 	Description    string
 	PriceIDR       int
-	ValiditySecs   int
 	ValidityLabel  string
 	ProfileName    string
 	RateLimit      string

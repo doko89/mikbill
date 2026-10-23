@@ -102,7 +102,7 @@ func (f *fakeProfileCreator) Create(in CreateProfileInput) (domain.HotspotProfil
 func validPackageInput() PackageInput {
 	return PackageInput{
 		Name: "Harian", Description: "Internet 12 jam", PriceIDR: 5000,
-		ValiditySecs: 43200, ValidityLabel: "12 Jam", ProfileName: "harian",
+		ValidityLabel: "12 Jam", ProfileName: "harian",
 		RateLimit: "5M/10M", SessionTimeout: 0, SharedUsers: 1,
 		IsActive: true, SortOrder: 0,
 	}
@@ -137,9 +137,9 @@ func TestPackageCreateWajib(t *testing.T) {
 		t.Fatal("profile kosong seharusnya ditolak")
 	}
 	bad = validPackageInput()
-	bad.ValiditySecs = 0
+	bad.ValidityLabel = ""
 	if _, err := uc.Create(bad); err == nil {
-		t.Fatal("validity 0 seharusnya ditolak")
+		t.Fatal("label kosong seharusnya ditolak")
 	}
 }
 

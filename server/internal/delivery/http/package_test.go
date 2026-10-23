@@ -8,8 +8,8 @@ import (
 func packageBody() map[string]any {
 	return map[string]any{
 		"name": "Harian", "description": "Internet 12 jam", "price_idr": 5000,
-		"validity_seconds": 43200, "validity_label": "12 Jam",
-		"profile_name": "harian", "rate_limit": "5M/10M",
+		"validity_label": "12 Jam",
+		"profile_name":   "harian", "rate_limit": "5M/10M",
 		"session_timeout": 0, "shared_users": 1,
 		"is_active": true, "sort_order": 1,
 	}

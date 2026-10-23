@@ -39,13 +39,36 @@ func TestMigrateSemuaTabel(t *testing.T) {
 			t.Fatalf("tabel %s hilang: %v", table, err)
 		}
 	}
-	var version string
-	if err := db.QueryRow(`SELECT version FROM schema_migrations`).Scan(&version); err != nil {
+	rows, err := db.Query(`SELECT version FROM schema_migrations ORDER BY version`)
+	if err != nil {
 		t.Fatal("versi migrasi tidak tercatat:", err)
 	}
-	if version != "001_init.sql" {
-		t.Fatalf("versi = %q, want 001_init.sql", version)
+	var versions []string
+	for rows.Next() {
+		var version string
+		if err := rows.Scan(&version); err != nil {
+			t.Fatal(err)
+		}
+		versions = append(versions, version)
 	}
+	rows.Close()
+	if len(versions) != 2 || versions[0] != "001_init.sql" || versions[1] != "002_drop_package_validity.sql" {
+		t.Fatalf("versi = %v, want 001 + 002", versions)
+	}
+	cols, err := db.Query(`SELECT name FROM pragma_table_info('packages')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for cols.Next() {
+		var name string
+		if err := cols.Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		if name == "validity_seconds" {
+			t.Fatal("kolom validity_seconds masih ada setelah migrasi 002")
+		}
+	}
+	cols.Close()
 	// Migrasi ulang harus idempotent.
 	if err := Migrate(db); err != nil {
 		t.Fatal("migrasi ulang gagal:", err)

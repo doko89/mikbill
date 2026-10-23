@@ -28,7 +28,6 @@ type PackageInput struct {
 	Name           string
 	Description    string
 	PriceIDR       int
-	ValiditySecs   int
 	ValidityLabel  string
 	ProfileName    string
 	RateLimit      string
@@ -54,8 +53,6 @@ func validatePackage(in PackageInput) (PackageInput, error) {
 		return in, InputError{"deskripsi maksimal 500 karakter"}
 	case in.PriceIDR < 1000:
 		return in, InputError{"harga paket minimal Rp1.000"}
-	case in.ValiditySecs <= 0:
-		return in, InputError{"masa aktif paket wajib diisi"}
 	case in.ValidityLabel == "":
 		return in, InputError{"label masa aktif wajib diisi"}
 	case len(in.ValidityLabel) > 32:
@@ -90,8 +87,8 @@ func (u *PackageUsecase) maybeCreateProfile(in PackageInput) error {
 func inputToPackage(in PackageInput) domain.Package {
 	return domain.Package{
 		Name: in.Name, Description: in.Description, PriceIDR: in.PriceIDR,
-		ValiditySecs: in.ValiditySecs, ValidityLabel: in.ValidityLabel,
-		ProfileName: in.ProfileName, RateLimit: in.RateLimit,
+		ValidityLabel: in.ValidityLabel,
+		ProfileName:   in.ProfileName, RateLimit: in.RateLimit,
 		SessionTimeout: in.SessionTimeout, SharedUsers: in.SharedUsers,
 		IsActive: in.IsActive, SortOrder: in.SortOrder,
 	}

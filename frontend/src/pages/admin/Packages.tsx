@@ -8,7 +8,7 @@ import {
   Trash,
 } from "@phosphor-icons/react";
 import { ApiError, api } from "../../lib/api";
-import { rupiah } from "../../lib/format";
+import { durasiMikrotik, rupiah } from "../../lib/format";
 import { Field, FormError, PageSkeleton, TextInput } from "../../components/ui";
 
 type Paket = {
@@ -16,7 +16,6 @@ type Paket = {
   name: string;
   description: string;
   price_idr: number;
-  validity_seconds: number;
   validity_label: string;
   profile_name: string;
   rate_limit: string;
@@ -37,7 +36,6 @@ const emptyForm = {
   name: "",
   description: "",
   price: "",
-  validitySecs: "",
   validityLabel: "",
   profileMode: "existing" as "existing" | "baru",
   profileName: "",
@@ -51,6 +49,11 @@ const emptyForm = {
 function errMsg(err: unknown): string {
   if (err instanceof ApiError) return err.message;
   return "Terjadi kesalahan";
+}
+
+function masaAktifProfile(profiles: Profile[], name: string): string {
+  const terpilih = profiles.find((p) => p.name === name);
+  return terpilih ? durasiMikrotik(terpilih.session_timeout) : "tidak diketahui";
 }
 
 export default function Packages() {
@@ -128,7 +131,6 @@ export default function Packages() {
       name: p.name,
       description: p.description,
       price: String(p.price_idr),
-      validitySecs: String(p.validity_seconds),
       validityLabel: p.validity_label,
       profileMode: "existing",
       profileName: p.profile_name,
@@ -153,7 +155,6 @@ export default function Packages() {
         name: form.name,
         description: form.description,
         price_idr: Number(form.price),
-        validity_seconds: Number(form.validitySecs),
         validity_label: form.validityLabel,
         profile_name: form.profileName,
         rate_limit: form.rateLimit,
@@ -319,28 +320,16 @@ export default function Packages() {
               onChange={(e) => set("description", e.target.value)}
             />
           </Field>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="Masa aktif (detik)" name="validitySecs" hint="Contoh: 43200 untuk 12 jam">
-              <TextInput
-                id="validitySecs"
-                name="validitySecs"
-                value={form.validitySecs}
-                inputMode="numeric"
-                placeholder="43200"
-                onChange={(e) => set("validitySecs", e.target.value)}
-              />
-            </Field>
-            <Field label="Label masa aktif" name="validityLabel" hint="Tampil di katalog, contoh: 12 Jam">
-              <TextInput
-                id="validityLabel"
-                name="validityLabel"
-                value={form.validityLabel}
-                maxLength={32}
-                placeholder="12 Jam"
-                onChange={(e) => set("validityLabel", e.target.value)}
-              />
-            </Field>
-          </div>
+          <Field label="Label masa aktif" name="validityLabel" hint="Tampil di katalog, contoh: 12 Jam">
+            <TextInput
+              id="validityLabel"
+              name="validityLabel"
+              value={form.validityLabel}
+              maxLength={32}
+              placeholder="12 Jam"
+              onChange={(e) => set("validityLabel", e.target.value)}
+            />
+          </Field>
 
           <fieldset className="grid gap-3">
             <legend className="label">Profile hotspot</legend>
@@ -377,6 +366,11 @@ export default function Packages() {
                     </option>
                   ))}
                 </select>
+                {form.profileName && (
+                  <p className="hint">
+                    Masa aktif profile: {masaAktifProfile(profiles, form.profileName)}
+                  </p>
+                )}
                 {profilesError && (
                   <p className="hint">
                     Daftar profile tidak dapat dimuat ({profilesError}). Periksa koneksi di{" "}

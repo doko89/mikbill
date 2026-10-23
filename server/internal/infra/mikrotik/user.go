@@ -43,12 +43,6 @@ func (s *Session) FindHotspotUserByComment(comment string) (domain.HotspotUser, 
 	}, true, nil
 }
 
-// FormatLimitUptime mendelegasikan ke domain agar usecase bisa memakai
-// rumus yang sama tanpa mengimpor infra.
-func FormatLimitUptime(validitySeconds int64) string {
-	return domain.FormatLimitUptime(validitySeconds)
-}
-
 // parseDuration membaca durasi RouterOS menjadi detik.
 func parseDuration(v string) (int, bool) {
 	v = strings.TrimSpace(v)

@@ -20,7 +20,7 @@ func NewPackageHandler(pkgs *usecase.PackageUsecase) *PackageHandler {
 func packageDTO(p domain.Package) map[string]any {
 	return map[string]any{
 		"id": p.ID, "name": p.Name, "description": p.Description,
-		"price_idr": p.PriceIDR, "validity_seconds": p.ValiditySecs,
+		"price_idr":      p.PriceIDR,
 		"validity_label": p.ValidityLabel, "profile_name": p.ProfileName,
 		"rate_limit": p.RateLimit, "session_timeout": p.SessionTimeout,
 		"shared_users": p.SharedUsers, "is_active": p.IsActive,
@@ -68,7 +68,6 @@ type packageBody struct {
 	Name           string `json:"name"`
 	Description    string `json:"description"`
 	PriceIDR       int    `json:"price_idr"`
-	ValiditySecs   int    `json:"validity_seconds"`
 	ValidityLabel  string `json:"validity_label"`
 	ProfileName    string `json:"profile_name"`
 	RateLimit      string `json:"rate_limit"`
@@ -86,8 +85,8 @@ func (b packageBody) input() usecase.PackageInput {
 	}
 	return usecase.PackageInput{
 		Name: b.Name, Description: b.Description, PriceIDR: b.PriceIDR,
-		ValiditySecs: b.ValiditySecs, ValidityLabel: b.ValidityLabel,
-		ProfileName: b.ProfileName, RateLimit: b.RateLimit,
+		ValidityLabel: b.ValidityLabel,
+		ProfileName:   b.ProfileName, RateLimit: b.RateLimit,
 		SessionTimeout: b.SessionTimeout, SharedUsers: b.SharedUsers,
 		IsActive: active, SortOrder: b.SortOrder, CreateProfile: b.CreateProfile,
 	}

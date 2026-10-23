@@ -19,8 +19,8 @@ func openTestOrders(t *testing.T) (*OrderRepo, *VoucherRepo, *WebhookRepo) {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(
-		`INSERT INTO packages (name, price_idr, validity_seconds, validity_label, profile_name)
-		 VALUES ('Harian', 15000, 43200, '12 Jam', 'default')`); err != nil {
+		`INSERT INTO packages (name, price_idr, validity_label, profile_name)
+		 VALUES ('Harian', 15000, '12 Jam', 'default')`); err != nil {
 		t.Fatal(err)
 	}
 	return NewOrderRepo(db), NewVoucherRepo(db), NewWebhookRepo(db)

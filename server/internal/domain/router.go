@@ -1,7 +1,5 @@
 package domain
 
-import "fmt"
-
 // Konstanta komentar yang dipakai Mikbil di router.
 const (
 	// RouterCommentMikbil menandai entri walled garden / DNS statik milik Mikbil.
@@ -77,19 +75,4 @@ type ProvisionStatus struct {
 	DeployMode string           `json:"deploy_mode"`
 	SiteURL    string           `json:"site_url"`
 	Checks     []ProvisionCheck `json:"checks"`
-}
-
-// FormatLimitUptime mengubah validity_seconds menjadi format RouterOS.
-// Contoh: 43200 -> "12:00:00", 604800 -> "7d 00:00:00".
-func FormatLimitUptime(validitySeconds int64) string {
-	if validitySeconds < 0 {
-		validitySeconds = 0
-	}
-	days := validitySeconds / 86400
-	rest := validitySeconds % 86400
-	clock := fmt.Sprintf("%02d:%02d:%02d", rest/3600, (rest%3600)/60, rest%60)
-	if days > 0 {
-		return fmt.Sprintf("%dd %s", days, clock)
-	}
-	return clock
 }

@@ -131,7 +131,7 @@ Operasi yang dipakai Mikbil (path RouterOS):
 | Test koneksi | login + `/system/resource/print` (atau `/ip/hotspot/print`) |
 | Daftar profile | `/ip/hotspot/user/profile/print` |
 | Buat profile | `/ip/hotspot/user/profile/add` (`name`, `rate-limit`, `session-timeout`, `shared-users`, `idle-timeout`) |
-| Buat voucher | `/ip/hotspot/user/add` (`name`, `password`, `profile`, `limit-uptime`, `comment=order:<id>`) |
+| Buat voucher | `/ip/hotspot/user/add` (`name`, `password`, `profile`, `comment=order:<id>`; tanpa `limit-uptime`, masa aktif ikut profile) |
 | Cek/hapus voucher | `/ip/hotspot/user/print`, `/remove` |
 | Walled garden | `/ip/hotspot/walled-garden/print|add|remove` (`dst-host`, opsional `dst-port`, `action=allow`) |
 | Aktifkan PAP | `/ip/hotspot/profile/print` (baca `login-by`) lalu `/ip/hotspot/profile/set` tambah `http-pap` aditif |

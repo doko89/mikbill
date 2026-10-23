@@ -92,7 +92,6 @@ CREATE TABLE packages (
   name TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   price_idr INTEGER NOT NULL,
-  validity_seconds INTEGER NOT NULL,      -- dipakai untuk limit-uptime voucher
   validity_label TEXT NOT NULL,           -- tampil di katalog ("12 Jam", "7 Hari")
   profile_name TEXT NOT NULL,             -- user profile di router
   rate_limit TEXT NOT NULL DEFAULT '',    -- "5M/10M" (info + dipakai saat create profile)
@@ -148,7 +147,7 @@ CREATE TABLE audit_logs (
 );
 ```
 
-Migrasi: file SQL berurutan di `internal/repository/sqlite/migrations/*.sql`, dijalankan saat start (`./mikbil serve` auto-migrate; `./mikbil migrate` manual).
+Migrasi: file SQL berurutan di `internal/repository/sqlite/migrations/*.sql`, dijalankan saat start (`./mikbil serve` auto-migrate; `./mikbil migrate` manual). `001_init.sql` skema awal; `002_drop_package_validity.sql` menghapus kolom `packages.validity_seconds` (masa aktif ikut profile router).
 
 ## 4. API Contract Internal
 
@@ -277,14 +276,14 @@ Client: dial TCP `host:port` (API) atau TLS (API-SSL). Login user+password. Time
 | Test | `/system/resource/print` (fallback `/ip/hotspot/print`) |
 | List user profile | `/ip/hotspot/user/profile/print` |
 | Buat user profile | `/ip/hotspot/user/profile/add` `=name=..` `=rate-limit=5M/10M` `=session-timeout=3600` `=shared-users=1` `=idle-timeout=5m` |
-| Buat voucher | `/ip/hotspot/user/add` `=name=<u>` `=password=<p>` `=profile=<profile>` `=limit-uptime=<dur>` `=comment=mikbil:<order>` |
+| Buat voucher | `/ip/hotspot/user/add` `=name=<u>` `=password=<p>` `=profile=<profile>` `=comment=mikbil:<order>` (tanpa `limit-uptime`; masa aktif ikut profile) |
 | Cari voucher order | `/ip/hotspot/user/print` `?comment=mikbil:<order>` |
 | List server profile | `/ip/hotspot/profile/print` (baca `login-by`) |
 | Aktifkan PAP | `/ip/hotspot/profile/set` `=.id=<id>` `=login-by=<existing>,http-pap` (skip bila sudah ada) |
 | Walled garden list/add/remove | `/ip/hotspot/walled-garden/print|add|remove` (`=dst-host=..` / `=dst-address=..` `=action=allow` `=comment=mikbil`) |
 | DNS statik list/add/remove | `/ip/dns/static/print|add|remove` (`=name=..` `=address=..` `=comment=mikbil`) |
 
-Format `limit-uptime` dari `validity_seconds`: helper `1d 02:00:00` style RouterOS (hari + `HH:MM:SS`). Contoh: 43200 → `12:00:00`; 604800 → `7d 00:00:00`.
+Masa aktif voucher mengikuti `session-timeout` profile di router; Mikbil tidak mengirim `limit-uptime`. Form paket menampilkan masa aktif profile terpilih dalam format MikroTik (`12h`, `30d`, `tanpa batas` bila 0).
 
 Semua entri yang dibuat Mikbil beri `comment=mikbil` agar verify/remove tepat sasaran.
 
@@ -336,7 +335,7 @@ Perintah binary: `serve`, `migrate`, `genkey`, `version`.
 
 ## 11. Testing
 
-- Unit Go: signer KrisKris (vektor uji dari contoh panduan), verifier webhook, format limit-uptime, generator voucher, state machine order (repo mock).
+- Unit Go: signer KrisKris (vektor uji dari contoh panduan), verifier webhook, generator voucher, state machine order (repo mock).
 - Integrasi: API + SQLite sementara; webhook dedup (kirim 2x delivery_id sama → 1 voucher); expired flow.
 - Kontrak KrisKris: test manual/sandbox end-to-end (buat invoice kecil → bayar → paid).
 - Matriks router: CHR/v6 + CHR/v7: test koneksi, list/buat profile, buat voucher, provisioning (walled garden, DNS statik, http-pap), hapus.

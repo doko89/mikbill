@@ -337,7 +337,7 @@ func payStack() (*fakeOrders, *fakePackages, *fakeSettings, *fakeWebhooks, *fake
 func seedPackage(t *testing.T, pkgs *fakePackages, active bool) domain.Package {
 	t.Helper()
 	p, err := pkgs.Create(domain.Package{
-		Name: "Harian", PriceIDR: 15000, ValiditySecs: 43200,
+		Name: "Harian", PriceIDR: 15000,
 		ValidityLabel: "12 Jam", ProfileName: "default", IsActive: active,
 	})
 	if err != nil {
@@ -536,7 +536,7 @@ func TestProcessPaidOrderIdempoten(t *testing.T) {
 	if u.Name != "VCHR1234" || u.Password != "VCHR1234" {
 		t.Fatalf("kredensial = %+v", u)
 	}
-	if u.Profile != "default" || u.LimitUptime != "12:00:00" || u.Comment != "mikbil:ord_test1" {
+	if u.Profile != "default" || u.LimitUptime != "" || u.Comment != "mikbil:ord_test1" {
 		t.Fatalf("user = %+v", u)
 	}
 }

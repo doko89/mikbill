@@ -88,7 +88,7 @@ func newOrderStack(t *testing.T) orderStack {
 	_ = set.Set(domain.SettingKrisKrisCallbackSec, encCallback)
 	_ = set.Set(domain.SettingHotspotLoginBase, "http://192.168.88.1/login")
 	if _, err := pkgRepo.Create(domain.Package{
-		Name: "Harian", PriceIDR: 15000, ValiditySecs: 43200,
+		Name: "Harian", PriceIDR: 15000,
 		ValidityLabel: "12 Jam", ProfileName: "default", IsActive: true,
 	}); err != nil {
 		t.Fatal(err)
