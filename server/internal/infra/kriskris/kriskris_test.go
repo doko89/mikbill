@@ -1,10 +1,13 @@
 package kriskris
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -209,6 +212,32 @@ func TestClientErrorEnvelope(t *testing.T) {
 	apiErr, ok = err.(*APIError)
 	if !ok || apiErr.StatusCode != 401 {
 		t.Fatalf("err = %v, want 401", err)
+	}
+}
+
+func TestDebugMenyembunyikanSecret(t *testing.T) {
+	t.Setenv("MIKBIL_DEBUG_KRISKRIS", "1")
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	srv := fakeServer(t, "rahasia-super-panjang-uji", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "data": []any{}})
+	})
+	defer srv.Close()
+	c := &Client{BaseURL: srv.URL, APIKey: "kunci-uji-debug", APISecret: "rahasia-super-panjang-uji"}
+	if _, err := c.BatchStatus(context.Background(), []string{"inv-1"}); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{"kriskris req", "kriskris resp", "ids=inv-1", "http=200"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("log tidak memuat %q:\n%s", want, out)
+		}
+	}
+	for _, secret := range []string{"rahasia-super-panjang-uji", "v1="} {
+		if strings.Contains(out, secret) {
+			t.Fatalf("log membocorkan rahasia %q:\n%s", secret, out)
+		}
 	}
 }
 

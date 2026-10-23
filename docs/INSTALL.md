@@ -70,6 +70,7 @@ Variabel env:
 | `MIKBIL_ADDR` | `:8080` | Alamat listen. Di balik reverse proxy: `127.0.0.1:8080` |
 | `MIKBIL_DB` | `./mikbil.db` | Path file SQLite, misal `/var/lib/mikbil/mikbil.db` |
 | `MIKBIL_ENC_KEY` | wajib | Hex 64 char dari `mikbil genkey` |
+| `MIKBIL_DEBUG_KRISKRIS` | kosong | Isi `1` untuk log request/response kriskris.id ke stderr (secret disamarkan) |
 
 Pasang dan jalankan service:
 

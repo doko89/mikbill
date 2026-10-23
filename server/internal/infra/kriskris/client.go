@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -127,6 +129,43 @@ type envelope struct {
 	RetryAfter int             `json:"retry_after"`
 }
 
+// debugAktif menyalakan log request/response KrisKris bila env
+// MIKBIL_DEBUG_KRISKRIS=1. Secret dan signature tidak pernah dicatat.
+func debugAktif() bool { return os.Getenv("MIKBIL_DEBUG_KRISKRIS") == "1" }
+
+// ringkas memangkas teks log agar tidak membanjiri stderr.
+func ringkas(s string, maks int) string {
+	if len(s) > maks {
+		return s[:maks] + "..."
+	}
+	return s
+}
+
+func debugReq(method, path, rawQuery, stamp, keyPrefix string) {
+	if !debugAktif() {
+		return
+	}
+	target := path
+	if rawQuery != "" {
+		target += "?" + rawQuery
+	}
+	log.Printf("kriskris req %s %s ts=%s key=%s***", method, target, stamp, keyPrefix)
+}
+
+func debugResp(status int, raw []byte) {
+	if !debugAktif() {
+		return
+	}
+	log.Printf("kriskris resp http=%d body=%s", status, ringkas(string(raw), 2048))
+}
+
+func debugErr(err error) {
+	if !debugAktif() {
+		return
+	}
+	log.Printf("kriskris transport gagal: %s", ringkas(err.Error(), 512))
+}
+
 func parseTimePtr(s string) *time.Time {
 	if s == "" {
 		return nil
@@ -163,9 +202,11 @@ func (c *Client) do(ctx context.Context, method, path, rawQuery string, payload 
 	req.Header.Set("X-API-Key", c.APIKey)
 	req.Header.Set("X-Kriskris-Timestamp", stamp)
 	req.Header.Set("X-Kriskris-Signature", SignRequest(c.APISecret, stamp, method, path, rawQuery, body))
+	debugReq(method, path, rawQuery, stamp, ringkas(c.APIKey, 10))
 
 	resp, err := c.httpClient().Do(req)
 	if err != nil {
+		debugErr(err)
 		return nil, nil, err
 	}
 	defer resp.Body.Close()
@@ -174,6 +215,7 @@ func (c *Client) do(ctx context.Context, method, path, rawQuery string, payload 
 	if err != nil {
 		return nil, nil, err
 	}
+	debugResp(resp.StatusCode, raw)
 	var env envelope
 	if err := json.Unmarshal(raw, &env); err != nil {
 		return nil, nil, &APIError{StatusCode: resp.StatusCode, Message: "respons tidak valid"}
