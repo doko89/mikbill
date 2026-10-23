@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+:root {
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --text: #18181b;
+  --text-2: #52525b;
+  --line: #e4e4e7;
+  --accent: #059669;
+  --accent-ink: #ffffff;
+  --danger: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #09090b;
+    --surface-2: #18181b;
+    --text: #fafafa;
+    --text-2: #a1a1aa;
+    --line: #27272a;
+    --accent: #10b981;
+    --accent-ink: #052e16;
+  }
+}
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  @media (min-width: 768px) {
+    body {
+      font-size: 16px;
+    }
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 0 20px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.25;
+    white-space: nowrap;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+
+  .btn:active {
+    transform: scale(0.98);
+  }
+
+  .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--line);
+  }
+
+  .btn-danger {
+    background: var(--danger);
+    color: #ffffff;
+  }
+
+  .label {
+    display: block;
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+
+  .input {
+    display: block;
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 14px;
+    font-size: 16px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .input::placeholder {
+    color: var(--text-2);
+    opacity: 0.8;
+  }
+
+  .field-error {
+    margin-top: 6px;
+    font-size: 14px;
+    color: var(--danger);
+  }
+
+  .hint {
+    margin-top: 6px;
+    font-size: 14px;
+    color: var(--text-2);
+  }
+
+  .skeleton {
+    border-radius: 8px;
+    background: var(--surface-2);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .skeleton {
+      animation: shimmer 1.6s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0%,
+      100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.55;
+      }
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn {
+      transition: none;
+    }
+
+    .btn:active {
+      transform: none;
+    }
+  }
+}

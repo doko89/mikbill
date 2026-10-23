@@ -1,0 +1,33 @@
+# Mikbil — unit systemd (VPS maupun server lokal, beda config saja).
+#
+# Pasang:
+#   sudo cp mikbil /usr/local/bin/mikbil
+#   sudo mkdir -p /etc/mikbil /var/lib/mikbil
+#   sudo cp mikbil.env.contoh /etc/mikbil/mikbil.env   # lalu isi (lihat docs/INSTALL.md)
+#   sudo cp mikbil.service /etc/systemd/system/mikbil.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now mikbil
+[Unit]
+Description=Mikbil billing hotspot voucher
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mikbil
+Group=mikbil
+WorkingDirectory=/var/lib/mikbil
+EnvironmentFile=/etc/mikbil/mikbil.env
+ExecStart=/usr/local/bin/mikbil serve
+Restart=on-failure
+RestartSec=5
+
+# Pengerasan dasar: tanpa root, tanpa tulis di luar direktori data.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/mikbil
+
+[Install]
+WantedBy=multi-user.target
