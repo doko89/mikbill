@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { QRCodeSVG } from "qrcode.react";
+import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
 import {
   ArrowClockwise,
   ArrowLeft,
   CheckCircle,
   Clock,
+  DownloadSimple,
   QrCode,
   WarningCircle,
   XCircle,
@@ -41,6 +42,65 @@ function formatCountdown(detik: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+// unduhQRIS merender kode QR + nominal ke canvas lalu mengunduhnya sebagai JPG.
+function unduhQRIS(order: OrderDetail, qr: HTMLCanvasElement | null) {
+  if (!qr || !order.qr_payload) return;
+  const W = 1200;
+  const Q = 1024;
+  const H = 1660;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#059669";
+  ctx.font = "800 56px Outfit, system-ui, sans-serif";
+  ctx.fillText("Pembayaran QRIS", W / 2, 140);
+  ctx.fillStyle = "#18181b";
+  ctx.font = "800 96px Outfit, system-ui, sans-serif";
+  ctx.fillText(rupiah(order.total_amount), W / 2, 280, W - 160);
+  ctx.drawImage(qr, (W - Q) / 2, 360, Q, Q);
+  ctx.fillStyle = "#52525b";
+  ctx.font = "500 36px Outfit, system-ui, sans-serif";
+  ctx.fillText(`Pesanan ${order.order_id}`, W / 2, 1480);
+  if (order.expires_at) {
+    const hingga = new Date(order.expires_at).toLocaleString("id-ID", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    ctx.fillText(`Berlaku hingga ${hingga}`, W / 2, 1540);
+  }
+
+  const unduh = (url: string) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `qris-${order.order_id}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+  if (typeof canvas.toBlob === "function") {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        unduh(url);
+        window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+      },
+      "image/jpeg",
+      0.92,
+    );
+  } else {
+    unduh(canvas.toDataURL("image/jpeg", 0.92));
+  }
+}
+
 export default function Pay() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
@@ -49,6 +109,7 @@ export default function Pay() {
   const [batalkan, setBatalkan] = useState(false);
   const [sekarang, setSekarang] = useState(() => Date.now());
   const timer = useRef<number | null>(null);
+  const qrKanv = useRef<HTMLCanvasElement | null>(null);
 
   const load = useCallback(async () => {
     if (!orderId) return;
@@ -199,6 +260,25 @@ export default function Pay() {
                 aria-label={`Kode QR pembayaran ${rupiah(order.total_amount)}`}
               />
             </span>
+            <QRCodeCanvas
+              ref={qrKanv}
+              value={order.qr_payload ?? ""}
+              size={1024}
+              bgColor="#ffffff"
+              fgColor="#000000"
+              level="M"
+              includeMargin={true}
+              style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+              aria-hidden={true}
+            />
+            <button
+              type="button"
+              className="btn btn-secondary min-h-[48px] w-full"
+              onClick={() => unduhQRIS(order, qrKanv.current)}
+              disabled={!order.qr_payload}
+            >
+              <DownloadSimple size={18} /> Unduh QRIS (JPG)
+            </button>
           </div>
           <p className="text-center text-3xl font-extrabold tracking-tight">
             {rupiah(order.total_amount)}
