@@ -136,6 +136,13 @@ CREATE TABLE webhook_deliveries (
   received_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+CREATE TABLE walled_garden_allowlist (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  dst_host TEXT NOT NULL UNIQUE,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
 CREATE TABLE audit_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   actor TEXT NOT NULL DEFAULT 'system',
@@ -147,7 +154,7 @@ CREATE TABLE audit_logs (
 );
 ```
 
-Migrasi: file SQL berurutan di `internal/repository/sqlite/migrations/*.sql`, dijalankan saat start (`./mikbil serve` auto-migrate; `./mikbil migrate` manual). `001_init.sql` skema awal; `002_drop_package_validity.sql` menghapus kolom `packages.validity_seconds` (masa aktif ikut profile router).
+Migrasi: file SQL berurutan di `internal/repository/sqlite/migrations/*.sql`, dijalankan saat start (`./mikbil serve` auto-migrate; `./mikbil migrate` manual). `001_init.sql` skema awal; `002_drop_package_validity.sql` menghapus kolom `packages.validity_seconds` (masa aktif ikut profile router); `003_allowlist.sql` tabel `walled_garden_allowlist`.
 
 ## 4. API Contract Internal
 
@@ -205,8 +212,10 @@ Auth: `POST /api/admin/login {username,password}` → set cookie sesi; `POST /ap
 | `GET/POST /api/admin/packages`, `PUT/DELETE /api/admin/packages/:id` | CRUD paket. `POST/PUT` dengan `create_profile:true` → buat profile di router dulu (gagal = paket tidak disimpan). Validasi: `price_idr >= 1000` |
 | `GET /api/admin/orders?status=&q=&page=` | List transaksi (paginasi 20) |
 | `GET /api/admin/orders/:id` | Detail + voucher (password didekripsi server-side) |
-| `GET /api/admin/provisioning/status` | Verify: walled garden ada? DNS statik ada (lokal)? http-pap aktif? |
-| `POST /api/admin/provisioning/apply` | Terapkan ulang provisioning |
+| `GET /api/admin/provisioning/status` | Verify: walled garden ada? allowlist lengkap? DNS statik ada (lokal)? http-pap aktif? |
+| `POST /api/admin/provisioning/apply` | Terapkan ulang provisioning (termasuk host allowlist aktif) |
+| `GET/POST /api/admin/walled-garden`, `PUT/DELETE /api/admin/walled-garden/:id` | CRUD allowlist `{dst_host, enabled}`. Mutasi langsung sync ke router; respons memuat `router_synced` + `router_error` (DB tetap tersimpan bila router gagal, rekonsiliasi saat provisioning berikut) |
+| `POST /api/admin/walled-garden/bulk` | Tambah banyak host `{hosts[≤100], enabled?}` → `{added, skipped, failed, router_error}`; satu sesi router. Dipakai tag preset UI (Semua, Payment gateway, E-wallet, Bank) |
 | `GET /api/admin/hotspot/login-template` | Unduh `login.html` (attachment) |
 | `GET /api/admin/hotspot/button-snippet` | `{snippet}` — HTML tombol dengan site_url terisi |
 | `GET/PUT /api/admin/settings` | site_url, hotspot_login_base, voucher_length, kredensial kriskris (tulis-saja) |
@@ -280,8 +289,10 @@ Client: dial TCP `host:port` (API) atau TLS (API-SSL). Login user+password. Time
 | Cari voucher order | `/ip/hotspot/user/print` `?comment=mikbil:<order>` |
 | List server profile | `/ip/hotspot/profile/print` (baca `login-by`) |
 | Aktifkan PAP | `/ip/hotspot/profile/set` `=.id=<id>` `=login-by=<existing>,http-pap` (skip bila sudah ada) |
-| Walled garden list/add/remove | `/ip/hotspot/walled-garden/print|add|remove` (`=dst-host=..` / `=dst-address=..` `=action=allow` `=comment=mikbil`) |
+| Walled garden host list/add/remove | `/ip/hotspot/walled-garden/print|add|remove` (`=dst-host=..` `=action=allow` `=comment=mikbil`) |
+| Walled garden IP list/add/remove | `/ip/hotspot/walled-garden/ip/print|add|remove` (`=dst-address=..` `=action=accept` `=comment=mikbil`) |
 | DNS statik list/add/remove | `/ip/dns/static/print|add|remove` (`=name=..` `=address=..` `=comment=mikbil`) |
+| DNS allow-remote-requests | `/ip/dns/print` baca (v6 `yes`/`no`, v7 `true`/`false`) + `/ip/dns/set` `=allow-remote-requests=yes` |
 
 Masa aktif voucher mengikuti `session-timeout` profile di router; Mikbil tidak mengirim `limit-uptime`. Form paket menampilkan masa aktif profile terpilih dalam format MikroTik (`12h`, `30d`, `tanpa batas` bila 0).
 
@@ -293,10 +304,12 @@ Semua entri yang dibuat Mikbil beri `comment=mikbil` agar verify/remove tepat sa
 
 1. **Koneksi**: dial + login. Gagal → stop.
 2. **http-pap**: untuk tiap hotspot server profile yang dipakai server hotspot aktif (atau semua profile bila ragu): baca `login-by`, tambah `http-pap` bila belum ada.
-3. **Walled garden**: hapus entri `comment=mikbil` lama → tambah baru:
-   - VPS: `dst-host=<domain-publik>` (+ `dst-port=443`? — putuskan saat implementasi; default tanpa batas port).
-   - Lokal: `dst-address=<ip-server>` + `dst-host=<domain-lokal>`.
-4. **DNS statik** (mode lokal saja): `name=<domain-lokal>` → `address=<ip-server>`; cek `/ip/dns/print` `allow-remote-requests=yes`, bila tidak → beri peringatan (jangan ubah diam-diam? — putuskan: ubah + catat di hasil).
+3. **Walled garden**: hapus entri `comment=mikbil` lama (kedua menu) → tambah baru:
+   - VPS: `dst-host=<domain-publik>` di `/ip/hotspot/walled-garden` (+ `dst-port=443`? — putuskan saat implementasi; default tanpa batas port).
+   - Lokal: `dst-address=<ip-server>` di `/ip/hotspot/walled-garden/ip` (`action=accept`) + `dst-host=<domain-lokal>` di `/ip/hotspot/walled-garden` (`action=allow`).
+   - Gagal parsial tidak menghentikan sequence: catat error router di pesan langkah, lanjut ke DNS + verify.
+   - Host allowlist yang aktif ikut ditulis sebagai `dst-host` (comment `mikbil`); host nonaktif/dihapus tidak ditulis ulang (terhapus dari router). Status menambah check `allowlist`.
+4. **DNS statik** (mode lokal saja): `name=<domain-lokal>` → `address=<ip-server>` (lewati tambah bila entri identik sudah ada); cek `/ip/dns/print` `allow-remote-requests=yes`, bila tidak → ubah ke `yes` + catat di hasil.
 5. **Verify**: baca ulang semua; kembalikan status akhir.
 
 `GET /api/admin/provisioning/status` hanya membaca (tanpa menulis) dan membandingkan dengan ekspektasi dari settings.
@@ -326,7 +339,7 @@ Perintah binary: `serve`, `migrate`, `genkey`, `version`.
 
 ## 10. Keamanan
 
-- Admin: bcrypt (cost 12), sesi acak 32 byte di cookie HttpOnly+Secure+SameSite=Lax, simpan hash sesi di DB (`sessions` — tambahkan tabel bila sesi persistent; alternatif JWT HMAC — putuskan: sesi DB agar bisa revoke).
+- Admin: bcrypt (cost 12), sesi acak 32 byte di cookie HttpOnly+SameSite=Lax (+Secure bila request via HTTPS: TLS langsung atau `X-Forwarded-Proto: https` di belakang reverse proxy), simpan hash sesi di DB (`sessions` — tambahkan tabel bila sesi persistent; alternatif JWT HMAC — putuskan: sesi DB agar bisa revoke).
 - CSRF: token per sesi untuk semua `POST/PUT/DELETE /api/admin/*`.
 - Rate-limit: login 5/menit/IP; create-order 10/menit/IP; get-order 30/menit/IP/order; webhook 120/menit/IP (longgar, retry KrisKris).
 - Enkripsi: AES-256-GCM, nonce acak per nilai; format simpan `base64(nonce|ciphertext)`.

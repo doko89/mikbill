@@ -34,6 +34,15 @@ type ConnectionRepository interface {
 	SaveTestResult(id int64, ok bool, msg string) error
 }
 
+// AllowlistRepository port daftar host allowlist walled garden.
+type AllowlistRepository interface {
+	List() ([]domain.WalledGardenAllow, error)
+	GetByID(id int64) (domain.WalledGardenAllow, error)
+	Create(dstHost string, enabled bool) (domain.WalledGardenAllow, error)
+	Update(a domain.WalledGardenAllow) (domain.WalledGardenAllow, error)
+	Delete(id int64) error
+}
+
 // SessionRepository port sesi login.
 type SessionRepository interface {
 	Create(s domain.Session) error

@@ -160,9 +160,10 @@ server {
 }
 ```
 
-Mikbil membaca IP klien dari `X-Forwarded-For` untuk rate-limit; pastikan
-header tersebut diteruskan. Mode VPS wajib HTTPS valid, kalau tidak wizard
-menolak `site_url` non-HTTPS.
+Mikbil membaca IP klien dari `X-Forwarded-For` untuk rate-limit dan skema
+dari `X-Forwarded-Proto` untuk flag Secure cookie sesi; pastikan kedua header
+tersebut diteruskan. Mode VPS wajib HTTPS valid, kalau tidak wizard menolak
+`site_url` non-HTTPS.
 
 ## 6. Health-Check dan Operasional
 

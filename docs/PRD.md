@@ -73,7 +73,7 @@ Aturan: `domain` tidak import layer lain; `usecase` hanya tergantung interface; 
 7. **Generate voucher otomatis** saat lunas: buat `/ip/hotspot/user` (username=password acak) dengan profile paket. Tampil halaman voucher: kode, tombol salin, unduh gambar (**PNG/JPG saja**), login otomatis.
 8. **Riwayat transaksi + detail order.**
 9. **Template hotspot `login.html` + snippet tombol:** admin bisa unduh `login.html` jadi dari Mikbil, atau tempel potongan kode tombol "Beli Voucher" ke `login.html` existing miliknya (snippet disediakan saat provisioning + di halaman pengaturan).
-10. **Provisioning router:** tambah/hapus entri walled garden + aktifkan `http-pap` pada hotspot server profile (aditif, login-by existing dipertahankan) + tambah/hapus DNS statik bila mode server lokal (lihat §9.4).
+10. **Provisioning router:** tambah/hapus entri walled garden + aktifkan `http-pap` pada hotspot server profile (aditif, login-by existing dipertahankan) + tambah/hapus DNS statik bila mode server lokal (lihat §9.4) + allowlist domain whitelist (mis. channel pembayaran; disable/hapus ikut menghapus entri di router).
 
 ### 5.2 Out-of-scope (v2+)
 
@@ -226,13 +226,14 @@ Admin (sesi cookie HttpOnly + CSRF):
 - `GET /api/admin/router/profiles` (live dari router), `POST /api/admin/router/profiles` (buat baru)
 - CRUD `/api/admin/packages`
 - `GET /api/admin/orders`, `GET /api/admin/orders/:id`
-- `POST /api/admin/provisioning/apply` (walled garden + http-pap), `GET /api/admin/provisioning/status` (verify)
+- `POST /api/admin/provisioning/apply` (walled garden + allowlist + http-pap), `GET /api/admin/provisioning/status` (verify)
+- CRUD `/api/admin/walled-garden` (allowlist domain whitelist)
 - `GET /api/admin/hotspot/login-template` (unduh `login.html`), `GET /api/admin/hotspot/button-snippet` (potongan kode tombol)
 
 ## 12. Halaman Frontend (draf route)
 
 Public: `/` (katalog), `/bayar/:orderId` (QR + countdown + status), `/voucher/:orderId` (hasil + unduh + login), `/bantuan`.
-Admin: `/admin/login`, `/admin` (ringkasan+transaksi terbaru), `/admin/transaksi`, `/admin/paket`, `/admin/router` (koneksi + profile + walled garden), `/admin/pengaturan` (domain, kriskris, template hotspot).
+Admin: `/admin/login`, `/admin` (ringkasan+transaksi terbaru), `/admin/transaksi`, `/admin/paket`, `/admin/router` (koneksi + profile + walled garden + allowlist), `/admin/pengaturan` (domain, kriskris, template hotspot).
 Setup: `/setup` (wizard 5 langkah, guard first-run).
 
 ## 13. Non-Fungsional

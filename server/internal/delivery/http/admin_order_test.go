@@ -79,7 +79,7 @@ func newAdminOrderStack(t *testing.T) adminOrderStack {
 	gw := newFakeGateway()
 	connUC := usecase.NewConnectionUsecase(conns, box, gw)
 	profUC := usecase.NewProfileUsecase(connUC)
-	provUC := usecase.NewProvisioningUsecase(set, connUC)
+	provUC := usecase.NewProvisioningUsecase(set, connUC, sqlite.NewAllowlistRepo(db))
 	hotUC := usecase.NewHotspotUsecase(set)
 	stub := &stubInvoice{}
 	factory := func() (usecase.InvoiceClient, error) { return stub, nil }

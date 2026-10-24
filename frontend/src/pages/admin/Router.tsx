@@ -7,6 +7,7 @@ import {
   PencilSimple,
   PlugsConnected,
   Plus,
+  Tag,
   Trash,
   XCircle,
 } from "@phosphor-icons/react";
@@ -36,6 +37,60 @@ type Profile = {
 type Check = { name: string; ok: boolean; message: string };
 type Step = { step: string; ok: boolean; message: string };
 type ProvStatus = { deploy_mode: string; site_url: string; checks: Check[] };
+type Allow = { id: number; dst_host: string; enabled: boolean };
+type AllowMut = Allow & { router_synced: boolean; router_error: string };
+type AllowDel = { deleted: boolean; router_synced: boolean; router_error: string };
+type AllowBulk = {
+  added: Allow[];
+  skipped: string[];
+  failed: { host: string; error: string }[];
+  router_error: string;
+};
+
+// Preset allowlist: domain dasar per kategori. Tiap domain mengembang
+// menjadi domain dasar + wildcard agar subdomain pembayaran tercakup.
+const ALLOW_PRESETS: { label: string; bases: string[] }[] = [
+  {
+    label: "Payment gateway",
+    bases: ["midtrans.com", "veritrans.co.id", "xendit.co", "tripay.co.id", "duitku.com", "ipaymu.com", "doku.com"],
+  },
+  {
+    label: "E-wallet",
+    bases: ["gojek.com", "gopay.co.id", "ovo.id", "dana.id", "shopeepay.co.id", "shopee.co.id", "linkaja.id"],
+  },
+  {
+    label: "Bank",
+    bases: [
+      "bca.co.id",
+      "klikbca.com",
+      "bankmandiri.co.id",
+      "bri.co.id",
+      "bni.co.id",
+      "bankbsi.co.id",
+      "cimbniaga.co.id",
+      "permatabank.com",
+      "danamon.co.id",
+      "btn.co.id",
+      "ocbc.id",
+      "maybank.co.id",
+      "bankmega.com",
+      "jago.com",
+      "seabank.co.id",
+      "blubybcadigital.id",
+      "btpn.com",
+      "jenius.com",
+      "bankneocommerce.co.id",
+    ],
+  },
+];
+
+function expandPreset(bases: string[]): string[] {
+  const out: string[] = [];
+  for (const b of bases) out.push(b, `*.${b}`);
+  return out;
+}
+
+const ALLOW_ALL = ALLOW_PRESETS.flatMap((p) => expandPreset(p.bases));
 
 const emptyConn = { name: "", host: "", port: "", username: "", password: "", useTls: false, active: true };
 const emptyProfile = { name: "", rateLimit: "", timeout: "", shared: "1" };
@@ -60,6 +115,8 @@ export default function Router() {
   const [conns, setConns] = useState<Connection[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [provStatus, setProvStatus] = useState<ProvStatus | null>(null);
+  const [allows, setAllows] = useState<Allow[]>([]);
+  const [allowHost, setAllowHost] = useState("");
   const [steps, setSteps] = useState<Step[]>([]);
   const [snippet, setSnippet] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -73,25 +130,27 @@ export default function Router() {
   const [copied, setCopied] = useState(false);
 
   const fetchAll = useCallback(async () => {
-    const [c, p, s, sn] = await Promise.all([
+    const [c, p, s, al, sn] = await Promise.all([
       api<Connection[]>("/api/admin/connections"),
       api<Profile[]>("/api/admin/router/profiles").catch(() => [] as Profile[]),
       api<ProvStatus>("/api/admin/provisioning/status").catch(() => null),
+      api<Allow[]>("/api/admin/walled-garden").catch(() => [] as Allow[]),
       api<{ snippet: string }>("/api/admin/hotspot/button-snippet")
         .then((d) => d.snippet)
         .catch(() => ""),
     ]);
-    return { c, p, s, sn };
+    return { c, p, s, al, sn };
   }, []);
 
   useEffect(() => {
     let alive = true;
     fetchAll()
-      .then(({ c, p, s, sn }) => {
+      .then(({ c, p, s, al, sn }) => {
         if (!alive) return;
         setConns(c);
         setProfiles(p);
         setProvStatus(s);
+        setAllows(al);
         setSnippet(sn);
         setLoading(false);
       })
@@ -109,10 +168,11 @@ export default function Router() {
     setLoading(true);
     setFormError(null);
     try {
-      const { c, p, s, sn } = await fetchAll();
+      const { c, p, s, al, sn } = await fetchAll();
       setConns(c);
       setProfiles(p);
       setProvStatus(s);
+      setAllows(al);
       setSnippet(sn);
     } catch (err) {
       setFormError(errMsg(err));
@@ -235,6 +295,92 @@ export default function Router() {
       const st = await api<ProvStatus>("/api/admin/provisioning/status");
       setProvStatus(st);
       setNotice(res.steps.every((s) => s.ok) ? "Provisioning selesai" : "Provisioning selesai dengan catatan, cek tiap langkah");
+    } catch (err) {
+      setFormError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function syncNotice(res: { router_synced: boolean; router_error: string }, okMsg: string) {
+    if (res.router_synced) {
+      setNotice(okMsg);
+    } else {
+      setNotice(`${okMsg}, tetapi sinkronisasi router gagal (${res.router_error}). Jalankan Terapkan provisioning.`);
+    }
+  }
+
+  async function addAllow() {
+    setBusy(true);
+    setFormError(null);
+    setNotice(null);
+    try {
+      const res = await api<AllowMut>("/api/admin/walled-garden", {
+        method: "POST",
+        body: { dst_host: allowHost },
+      });
+      setAllowHost("");
+      syncNotice(res, "Host ditambahkan");
+      await load();
+    } catch (err) {
+      setFormError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleAllow(a: Allow) {
+    setBusy(true);
+    setFormError(null);
+    setNotice(null);
+    try {
+      const res = await api<AllowMut>(`/api/admin/walled-garden/${a.id}`, {
+        method: "PUT",
+        body: { dst_host: a.dst_host, enabled: !a.enabled },
+      });
+      syncNotice(res, a.enabled ? "Host dinonaktifkan" : "Host diaktifkan");
+      await load();
+    } catch (err) {
+      setFormError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addPreset(label: string, hosts: string[]) {
+    setBusy(true);
+    setFormError(null);
+    setNotice(null);
+    try {
+      const res = await api<AllowBulk>("/api/admin/walled-garden/bulk", {
+        method: "POST",
+        body: { hosts },
+      });
+      const parts = [`${label}: ${res.added.length} ditambahkan`];
+      if (res.skipped.length > 0) parts.push(`${res.skipped.length} sudah ada`);
+      if (res.failed.length > 0) parts.push(`${res.failed.length} gagal (${res.failed[0].error})`);
+      let msg = parts.join(", ");
+      if (res.router_error) {
+        msg += `. Sinkronisasi router gagal (${res.router_error}). Jalankan Terapkan provisioning`;
+      }
+      setNotice(`${msg}.`);
+      await load();
+    } catch (err) {
+      setFormError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteAllow(id: number) {
+    if (!window.confirm("Hapus host ini? Entrinya ikut dihapus dari router.")) return;
+    setBusy(true);
+    setFormError(null);
+    setNotice(null);
+    try {
+      const res = await api<AllowDel>(`/api/admin/walled-garden/${id}`, { method: "DELETE" });
+      syncNotice(res, "Host dihapus");
+      await load();
     } catch (err) {
       setFormError(errMsg(err));
     } finally {
@@ -545,6 +691,94 @@ export default function Router() {
                   <span className="font-bold">{s.step}: </span>
                   <span style={{ color: "var(--text-2)" }}>{s.message}</span>
                 </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <Section
+        title="Allowlist walled garden"
+        desc="Domain yang boleh diakses tanpa login, mis. channel pembayaran. Perubahan langsung ditulis ke router."
+      >
+        <div className="mb-4">
+          <p className="label" id="allowPresetLabel">
+            Preset cepat
+          </p>
+          <div className="flex flex-wrap gap-2" role="group" aria-labelledby="allowPresetLabel">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => addPreset("Semua", ALLOW_ALL)}
+              disabled={busy}
+            >
+              <Tag size={18} /> Semua ({ALLOW_ALL.length})
+            </button>
+            {ALLOW_PRESETS.map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => addPreset(p.label, expandPreset(p.bases))}
+                disabled={busy}
+              >
+                <Tag size={18} /> {p.label} ({expandPreset(p.bases).length})
+              </button>
+            ))}
+          </div>
+          <p className="hint">Satu klik menambah semua domain preset yang belum ada, termasuk wildcard.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+          <Field label="Domain baru" name="allowHost" hint="cth. api.dana.id">
+            <TextInput
+              id="allowHost"
+              name="allowHost"
+              placeholder="api.dana.id"
+              autoComplete="off"
+              inputMode="url"
+              value={allowHost}
+              onChange={(e) => setAllowHost(e.target.value)}
+            />
+          </Field>
+          <button type="button" className="btn btn-primary w-full sm:w-auto" onClick={addAllow} disabled={busy}>
+            <Plus size={18} /> Tambah
+          </button>
+        </div>
+        {allows.length === 0 ? (
+          <p className="mt-4 text-sm" style={{ color: "var(--text-2)" }}>
+            Belum ada host. Tambahkan domain pembayaran agar bisa diakses sebelum login.
+          </p>
+        ) : (
+          <ul className="mt-4 grid gap-2">
+            {allows.map((a) => (
+              <li
+                key={a.id}
+                className="card flex flex-wrap items-center gap-2 p-3"
+                style={{ background: "var(--surface-2)" }}
+              >
+                <span className="min-w-0 flex-1 break-all font-mono text-sm">{a.dst_host}</span>
+                {!a.enabled && (
+                  <span
+                    className="rounded-full px-2 py-0.5 text-xs font-semibold"
+                    style={{ border: "1px solid var(--line)", color: "var(--text-2)" }}
+                  >
+                    Nonaktif
+                  </span>
+                )}
+                <div className="flex gap-2">
+                  <button type="button" className="btn btn-secondary" onClick={() => toggleAllow(a)} disabled={busy}>
+                    {a.enabled ? "Nonaktifkan" : "Aktifkan"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => deleteAllow(a.id)}
+                    disabled={busy}
+                    aria-label={`Hapus ${a.dst_host}`}
+                  >
+                    <Trash size={18} />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

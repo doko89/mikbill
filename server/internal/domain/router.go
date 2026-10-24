@@ -32,7 +32,8 @@ type HotspotServerProfile struct {
 	LoginBy string // daftar comma-separated: chap,http-pap,cookie,...
 }
 
-// WalledGardenEntry adalah entri walled garden (/ip/hotspot/walled-garden).
+// WalledGardenEntry adalah entri walled garden: dst-host di
+// /ip/hotspot/walled-garden, dst-address di /ip/hotspot/walled-garden/ip.
 type WalledGardenEntry struct {
 	ID         string
 	DstHost    string
@@ -40,6 +41,15 @@ type WalledGardenEntry struct {
 	Action     string
 	Comment    string
 	Disabled   bool
+}
+
+// WalledGardenAllow adalah satu host allowlist milik Mikbil: domain yang
+// boleh diakses tanpa login (mis. channel pembayaran). Diterapkan ke router
+// sebagai entri walled garden dst-host dengan comment mikbil.
+type WalledGardenAllow struct {
+	ID      int64
+	DstHost string
+	Enabled bool
 }
 
 // StaticDNSEntry adalah entri DNS statik (/ip/dns/static).

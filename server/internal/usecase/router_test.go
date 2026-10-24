@@ -183,6 +183,7 @@ type fakeSession struct {
 	allowRemote   bool
 	writes        []string
 	users         []domain.HotspotUser
+	failWGAddr    bool // tolak entri dst-address seperti router pada menu yang salah
 }
 
 func (s *fakeSession) Close() error { s.closed = true; return nil }
@@ -230,6 +231,9 @@ func (s *fakeSession) ListWalledGarden() ([]domain.WalledGardenEntry, error) {
 func (s *fakeSession) AddWalledGarden(e domain.WalledGardenEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.failWGAddr && e.DstAddress != "" {
+		return errors.New("unknown parameter dst-address")
+	}
 	s.writes = append(s.writes, "add-wg:"+e.DstHost+e.DstAddress)
 	e.ID = string(rune(len(s.walledGarden) + 1))
 	e.Comment = domain.RouterCommentMikbil
@@ -323,15 +327,86 @@ func (g *fakeGateway) Dial(p RouterDialParams) (RouterSession, error) {
 	return g.sess, nil
 }
 
-func newStack() (*fakeConns, *fakeSettings, *fakeGateway, *ConnectionUsecase, *ProvisioningUsecase) {
+// fakeAllowlist adalah AllowlistRepository memori untuk test.
+type fakeAllowlist struct {
+	mu     sync.Mutex
+	rows   map[int64]domain.WalledGardenAllow
+	nextID int64
+}
+
+func newFakeAllowlist() *fakeAllowlist {
+	return &fakeAllowlist{rows: map[int64]domain.WalledGardenAllow{}, nextID: 1}
+}
+
+func (f *fakeAllowlist) List() ([]domain.WalledGardenAllow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []domain.WalledGardenAllow{}
+	for _, r := range f.rows {
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+func (f *fakeAllowlist) GetByID(id int64) (domain.WalledGardenAllow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r, ok := f.rows[id]
+	if !ok {
+		return domain.WalledGardenAllow{}, domain.ErrNotFound
+	}
+	return r, nil
+}
+
+func (f *fakeAllowlist) Create(dstHost string, enabled bool) (domain.WalledGardenAllow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, r := range f.rows {
+		if r.DstHost == dstHost {
+			return domain.WalledGardenAllow{}, domain.ErrAlreadyExists
+		}
+	}
+	a := domain.WalledGardenAllow{ID: f.nextID, DstHost: dstHost, Enabled: enabled}
+	f.nextID++
+	f.rows[a.ID] = a
+	return a, nil
+}
+
+func (f *fakeAllowlist) Update(a domain.WalledGardenAllow) (domain.WalledGardenAllow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.rows[a.ID]; !ok {
+		return domain.WalledGardenAllow{}, domain.ErrNotFound
+	}
+	for id, r := range f.rows {
+		if id != a.ID && r.DstHost == a.DstHost {
+			return domain.WalledGardenAllow{}, domain.ErrAlreadyExists
+		}
+	}
+	f.rows[a.ID] = a
+	return a, nil
+}
+
+func (f *fakeAllowlist) Delete(id int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.rows[id]; !ok {
+		return domain.ErrNotFound
+	}
+	delete(f.rows, id)
+	return nil
+}
+
+func newStack() (*fakeConns, *fakeSettings, *fakeGateway, *ConnectionUsecase, *ProvisioningUsecase, *fakeAllowlist) {
 	conns := newFakeConns()
 	set := newFakeSettings()
+	allow := newFakeAllowlist()
 	gw := &fakeGateway{sess: &fakeSession{
 		serverProfile: []domain.HotspotServerProfile{{ID: "*1", Name: "hsprof1", LoginBy: "chap,cookie"}},
 	}}
 	connUC := NewConnectionUsecase(conns, fakeBox{}, gw)
-	provUC := NewProvisioningUsecase(set, connUC)
-	return conns, set, gw, connUC, provUC
+	provUC := NewProvisioningUsecase(set, connUC, allow)
+	return conns, set, gw, connUC, provUC, allow
 }
 
 func mustSaveConn(t *testing.T, connUC *ConnectionUsecase) domain.Connection {
@@ -346,7 +421,7 @@ func mustSaveConn(t *testing.T, connUC *ConnectionUsecase) domain.Connection {
 }
 
 func TestConnectionCRUD(t *testing.T) {
-	_, _, _, connUC, _ := newStack()
+	_, _, _, connUC, _, _ := newStack()
 
 	c, err := connUC.Create(ConnectionInput{Host: "10.0.0.1", Username: "a", Password: "p"})
 	if err != nil {
@@ -391,7 +466,7 @@ func TestConnectionCRUD(t *testing.T) {
 }
 
 func TestConnectionTestMenyimpanHasil(t *testing.T) {
-	conns, _, gw, connUC, _ := newStack()
+	conns, _, gw, connUC, _, _ := newStack()
 	c := mustSaveConn(t, connUC)
 
 	res, err := connUC.Test(c.ID)
@@ -425,7 +500,7 @@ func TestConnectionTestMenyimpanHasil(t *testing.T) {
 }
 
 func TestProfileListCreate(t *testing.T) {
-	_, _, gw, connUC, _ := newStack()
+	_, _, gw, connUC, _, _ := newStack()
 	profUC := NewProfileUsecase(connUC)
 	gw.sess.userProfiles = []domain.HotspotProfile{{Name: "default", SharedUsers: 1}}
 
@@ -467,7 +542,7 @@ func allStepsOK(steps []domain.ProvisionStep) bool {
 }
 
 func TestProvisioningApplyVPS(t *testing.T) {
-	_, set, gw, connUC, provUC := newStack()
+	_, set, gw, connUC, provUC, _ := newStack()
 	seedSiteVPS(t, set)
 	mustSaveConn(t, connUC)
 	// Entri lama milik mikbil harus diganti, entri lain dipertahankan.
@@ -506,7 +581,7 @@ func TestProvisioningApplyVPS(t *testing.T) {
 }
 
 func TestProvisioningApplyLokal(t *testing.T) {
-	_, set, gw, connUC, provUC := newStack()
+	_, set, gw, connUC, provUC, _ := newStack()
 	_ = set.Set(domain.SettingDeployMode, domain.DeployLocal)
 	_ = set.Set(domain.SettingSiteURL, "http://mikbil.lan")
 	_ = set.Set(domain.SettingLocalServerIP, "10.10.10.2")
@@ -530,8 +605,65 @@ func TestProvisioningApplyLokal(t *testing.T) {
 	}
 }
 
+func TestProvisioningWalledGardenParsialTetapLanjut(t *testing.T) {
+	_, set, gw, connUC, provUC, _ := newStack()
+	_ = set.Set(domain.SettingDeployMode, domain.DeployLocal)
+	_ = set.Set(domain.SettingSiteURL, "http://mikbil.lan")
+	_ = set.Set(domain.SettingLocalServerIP, "10.10.10.2")
+	mustSaveConn(t, connUC)
+	gw.sess.failWGAddr = true
+
+	steps, err := provUC.Apply()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) != 5 {
+		t.Fatalf("steps = %+v, want 5 langkah (dns+verify tetap jalan)", steps)
+	}
+	wg := steps[2]
+	if wg.Step != "walled-garden" || wg.OK {
+		t.Fatalf("walled-garden = %+v, want gagal", wg)
+	}
+	if !strings.Contains(wg.Message, "1 dari 2") || !strings.Contains(wg.Message, "dst-address") {
+		t.Fatalf("pesan walled-garden = %q, want hitungan + error router", wg.Message)
+	}
+	if steps[3].Step != "dns-statik" || !steps[3].OK {
+		t.Fatalf("dns-statik = %+v, want tetap jalan dan OK", steps[3])
+	}
+	if steps[4].Step != "verify" || steps[4].OK {
+		t.Fatalf("verify = %+v, want jalan dan gagal (walled garden belum lengkap)", steps[4])
+	}
+}
+
+func TestProvisioningDNSManualIdentikTidakDitulisUlang(t *testing.T) {
+	_, set, gw, connUC, provUC, _ := newStack()
+	_ = set.Set(domain.SettingDeployMode, domain.DeployLocal)
+	_ = set.Set(domain.SettingSiteURL, "http://mikbil.lan")
+	_ = set.Set(domain.SettingLocalServerIP, "10.10.10.2")
+	mustSaveConn(t, connUC)
+	gw.sess.staticDNS = []domain.StaticDNSEntry{
+		{ID: "m", Name: "mikbil.lan", Address: "10.10.10.2", Comment: "manual"},
+	}
+
+	steps, err := provUC.Apply()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !allStepsOK(steps) {
+		t.Fatalf("steps = %+v, want semua OK", steps)
+	}
+	for _, w := range gw.sess.writes {
+		if strings.HasPrefix(w, "add-dns:") {
+			t.Fatalf("tulis DNS duplikat: %v", gw.sess.writes)
+		}
+	}
+	if len(gw.sess.staticDNS) != 1 {
+		t.Fatalf("dns statik = %+v, want tetap 1 entri", gw.sess.staticDNS)
+	}
+}
+
 func TestProvisioningKoneksiGagalBerhenti(t *testing.T) {
-	_, set, gw, connUC, provUC := newStack()
+	_, set, gw, connUC, provUC, _ := newStack()
 	seedSiteVPS(t, set)
 	mustSaveConn(t, connUC)
 	gw.failDial = true
@@ -549,16 +681,22 @@ func TestProvisioningKoneksiGagalBerhenti(t *testing.T) {
 }
 
 func TestProvisioningStatusReadOnly(t *testing.T) {
-	_, set, gw, connUC, provUC := newStack()
+	_, set, gw, connUC, provUC, allow := newStack()
 	seedSiteVPS(t, set)
 	mustSaveConn(t, connUC)
+	if _, err := allow.Create("api.dana.id", true); err != nil {
+		t.Fatal(err)
+	}
 
 	st, err := provUC.Status()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(st.Checks) != 3 {
+	if len(st.Checks) != 4 {
 		t.Fatalf("checks VPS = %+v", st.Checks)
+	}
+	if st.Checks[3].Name != "allowlist" || st.Checks[3].OK {
+		t.Fatalf("allowlist sebelum apply = %+v, want gagal", st.Checks[3])
 	}
 	if st.Checks[1].OK {
 		t.Fatal("http-pap seharusnya belum OK sebelum apply")
@@ -577,6 +715,199 @@ func TestProvisioningStatusReadOnly(t *testing.T) {
 	for _, c := range st.Checks {
 		if !c.OK {
 			t.Fatalf("check setelah apply = %+v", st.Checks)
+		}
+	}
+}
+
+func wgHosts(sess *fakeSession) []string {
+	var out []string
+	for _, e := range sess.walledGarden {
+		if e.DstHost != "" {
+			out = append(out, e.DstHost)
+		}
+	}
+	return out
+}
+
+func TestAllowlistCRUDSinkronRouter(t *testing.T) {
+	_, set, gw, connUC, _, allow := newStack()
+	seedSiteVPS(t, set)
+	auc := NewAllowlistUsecase(allow, set, connUC)
+	mustSaveConn(t, connUC)
+
+	a, sync, err := auc.Create("API.DANA.id.", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.DstHost != "api.dana.id" || !sync.Synced {
+		t.Fatalf("create = %+v %+v, want normalisasi + sync", a, sync)
+	}
+	if hosts := wgHosts(gw.sess); !containsStr(hosts, "api.dana.id") {
+		t.Fatalf("router tidak menerima entri: %v", hosts)
+	}
+
+	m, sync, err := auc.Create("m.bankmandiri.co.id", false)
+	if err != nil || !sync.Synced {
+		t.Fatalf("create nonaktif = %+v %+v %v", m, sync, err)
+	}
+	if hosts := wgHosts(gw.sess); containsStr(hosts, "m.bankmandiri.co.id") {
+		t.Fatalf("host nonaktif tertulis ke router: %v", hosts)
+	}
+
+	if _, _, err := auc.Create("api.dana.id", true); err == nil {
+		t.Fatal("duplikat seharusnya konflik")
+	} else if _, ok := err.(ConflictError); !ok {
+		t.Fatalf("duplikat = %T, want ConflictError", err)
+	}
+	for _, bad := range []string{"", "bukan domain!", "192.168.1.1", "wifi.contoh.com"} {
+		if _, _, err := auc.Create(bad, true); err == nil {
+			t.Fatalf("host %q seharusnya ditolak", bad)
+		}
+	}
+
+	if _, sync, err := auc.Update(m.ID, "m.bankmandiri.co.id", true); err != nil || !sync.Synced {
+		t.Fatalf("aktifkan = %+v %v", sync, err)
+	}
+	if hosts := wgHosts(gw.sess); !containsStr(hosts, "m.bankmandiri.co.id") {
+		t.Fatalf("aktifkan tidak menulis router: %v", hosts)
+	}
+
+	if _, sync, err := auc.Update(a.ID, "api.dana.id", false); err != nil || !sync.Synced {
+		t.Fatalf("disable = %+v %v", sync, err)
+	}
+	if hosts := wgHosts(gw.sess); containsStr(hosts, "api.dana.id") {
+		t.Fatalf("disable tidak menghapus dari router: %v", hosts)
+	}
+
+	if sync, err := auc.Delete(m.ID); err != nil || !sync.Synced {
+		t.Fatalf("hapus = %+v %v", sync, err)
+	}
+	if hosts := wgHosts(gw.sess); containsStr(hosts, "m.bankmandiri.co.id") {
+		t.Fatalf("hapus tidak menghapus dari router: %v", hosts)
+	}
+	if _, err := auc.Delete(999); err == nil {
+		t.Fatal("hapus id asing seharusnya gagal")
+	}
+
+	list, err := auc.List()
+	if err != nil || len(list) != 1 || list[0].Enabled {
+		t.Fatalf("list = %+v %v", list, err)
+	}
+}
+
+func TestAllowlistSyncGagalTetapTersimpan(t *testing.T) {
+	_, set, gw, connUC, _, allow := newStack()
+	seedSiteVPS(t, set)
+	auc := NewAllowlistUsecase(allow, set, connUC)
+	mustSaveConn(t, connUC)
+	gw.failDial = true
+
+	a, sync, err := auc.Create("api.gopay.co.id", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sync.Synced || sync.Error == "" {
+		t.Fatalf("sync gagal = %+v, want penanda gagal + pesan", sync)
+	}
+	if _, err := allow.GetByID(a.ID); err != nil {
+		t.Fatalf("entri seharusnya tetap tersimpan: %v", err)
+	}
+}
+
+func TestAllowlistBulk(t *testing.T) {
+	_, set, gw, connUC, _, allow := newStack()
+	seedSiteVPS(t, set)
+	auc := NewAllowlistUsecase(allow, set, connUC)
+	mustSaveConn(t, connUC)
+	if _, err := allow.Create("api.dana.id", true); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := auc.CreateBulk([]string{
+		"API.DANA.id", "api.gopay.co.id", "api.gopay.co.id",
+		"bukan domain", "wifi.contoh.com",
+	}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Added) != 1 || res.Added[0].DstHost != "api.gopay.co.id" {
+		t.Fatalf("added = %+v", res.Added)
+	}
+	if len(res.Skipped) != 1 || res.Skipped[0] != "api.dana.id" {
+		t.Fatalf("skipped = %v", res.Skipped)
+	}
+	if len(res.Failed) != 2 {
+		t.Fatalf("failed = %+v", res.Failed)
+	}
+	if res.RouterError != "" {
+		t.Fatalf("router_error = %q", res.RouterError)
+	}
+	hosts := wgHosts(gw.sess)
+	if !containsStr(hosts, "api.gopay.co.id") || containsStr(hosts, "api.dana.id") {
+		t.Fatalf("router = %v, want hanya host baru", hosts)
+	}
+
+	res, err = auc.CreateBulk([]string{"m.bankmandiri.co.id"}, false)
+	if err != nil || len(res.Added) != 1 || res.RouterError != "" {
+		t.Fatalf("bulk nonaktif = %+v %v", res, err)
+	}
+	if hosts := wgHosts(gw.sess); containsStr(hosts, "m.bankmandiri.co.id") {
+		t.Fatalf("host nonaktif tertulis: %v", hosts)
+	}
+
+	many := make([]string, 101)
+	for i := range many {
+		many[i] = "host.example.id"
+	}
+	if _, err := auc.CreateBulk(many, true); err == nil {
+		t.Fatal("bulk > 100 seharusnya ditolak")
+	}
+	if _, err := auc.CreateBulk(nil, true); err == nil {
+		t.Fatal("bulk kosong seharusnya ditolak")
+	}
+
+	gw.failDial = true
+	res, err = auc.CreateBulk([]string{"api.ovo.id"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Added) != 1 || res.RouterError == "" {
+		t.Fatalf("bulk router mati = %+v, want tersimpan + router_error", res)
+	}
+}
+
+func TestProvisioningApplyTermasukAllowlist(t *testing.T) {
+	_, set, gw, connUC, provUC, allow := newStack()
+	seedSiteVPS(t, set)
+	mustSaveConn(t, connUC)
+	if _, err := allow.Create("api.dana.id", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := allow.Create("api.gopay.co.id", false); err != nil {
+		t.Fatal(err)
+	}
+
+	steps, err := provUC.Apply()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !allStepsOK(steps) {
+		t.Fatalf("steps = %+v", steps)
+	}
+	if !strings.Contains(steps[2].Message, "1 allowlist") {
+		t.Fatalf("pesan walled-garden = %q, want hitungan allowlist", steps[2].Message)
+	}
+	hosts := wgHosts(gw.sess)
+	if !containsStr(hosts, "api.dana.id") || containsStr(hosts, "api.gopay.co.id") {
+		t.Fatalf("allowlist di router = %v", hosts)
+	}
+	st, err := provUC.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range st.Checks {
+		if c.Name == "allowlist" && !c.OK {
+			t.Fatalf("allowlist setelah apply = %+v", st.Checks)
 		}
 	}
 }

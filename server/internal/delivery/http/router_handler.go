@@ -9,17 +9,18 @@ import (
 	"github.com/mikbil/mikbil/internal/usecase"
 )
 
-// RouterHandler menangani API koneksi, profile, provisioning, template (tech_spec 4.4).
+// RouterHandler menangani API koneksi, profile, provisioning, allowlist, template (tech_spec 4.4).
 type RouterHandler struct {
 	conns    *usecase.ConnectionUsecase
 	profiles *usecase.ProfileUsecase
 	prov     *usecase.ProvisioningUsecase
 	hotspot  *usecase.HotspotUsecase
+	allow    *usecase.AllowlistUsecase
 }
 
 // NewRouterHandler membuat RouterHandler.
-func NewRouterHandler(conns *usecase.ConnectionUsecase, profiles *usecase.ProfileUsecase, prov *usecase.ProvisioningUsecase, hotspot *usecase.HotspotUsecase) *RouterHandler {
-	return &RouterHandler{conns: conns, profiles: profiles, prov: prov, hotspot: hotspot}
+func NewRouterHandler(conns *usecase.ConnectionUsecase, profiles *usecase.ProfileUsecase, prov *usecase.ProvisioningUsecase, hotspot *usecase.HotspotUsecase, allow *usecase.AllowlistUsecase) *RouterHandler {
+	return &RouterHandler{conns: conns, profiles: profiles, prov: prov, hotspot: hotspot, allow: allow}
 }
 
 func connectionDTO(c domain.Connection) map[string]any {
@@ -203,6 +204,136 @@ func (h *RouterHandler) ProvisioningApply(w http.ResponseWriter, _ *http.Request
 		return
 	}
 	WriteOK(w, http.StatusOK, map[string]any{"steps": steps})
+}
+
+func allowlistDTO(a domain.WalledGardenAllow) map[string]any {
+	return map[string]any{"id": a.ID, "dst_host": a.DstHost, "enabled": a.Enabled}
+}
+
+func allowlistSyncDTO(a domain.WalledGardenAllow, sync usecase.SyncResult) map[string]any {
+	return map[string]any{
+		"id": a.ID, "dst_host": a.DstHost, "enabled": a.Enabled,
+		"router_synced": sync.Synced, "router_error": sync.Error,
+	}
+}
+
+// ListAllowlist menangani GET /api/admin/walled-garden.
+func (h *RouterHandler) ListAllowlist(w http.ResponseWriter, _ *http.Request) {
+	as, err := h.allow.List()
+	if err != nil {
+		writeUsecaseErr(w, err)
+		return
+	}
+	out := make([]map[string]any, 0, len(as))
+	for _, a := range as {
+		out = append(out, allowlistDTO(a))
+	}
+	WriteOK(w, http.StatusOK, out)
+}
+
+type allowlistBody struct {
+	DstHost string `json:"dst_host"`
+	Enabled *bool  `json:"enabled"`
+}
+
+// CreateAllowlist menangani POST /api/admin/walled-garden.
+func (h *RouterHandler) CreateAllowlist(w http.ResponseWriter, r *http.Request) {
+	var b allowlistBody
+	if !decodeJSON(w, r, &b) {
+		return
+	}
+	enabled := true
+	if b.Enabled != nil {
+		enabled = *b.Enabled
+	}
+	a, sync, err := h.allow.Create(b.DstHost, enabled)
+	if err != nil {
+		writeUsecaseErr(w, err)
+		return
+	}
+	WriteOK(w, http.StatusCreated, allowlistSyncDTO(a, sync))
+}
+
+type allowlistBulkBody struct {
+	Hosts   []string `json:"hosts"`
+	Enabled *bool    `json:"enabled"`
+}
+
+// CreateAllowlistBulk menangani POST /api/admin/walled-garden/bulk.
+func (h *RouterHandler) CreateAllowlistBulk(w http.ResponseWriter, r *http.Request) {
+	var b allowlistBulkBody
+	if !decodeJSON(w, r, &b) {
+		return
+	}
+	enabled := true
+	if b.Enabled != nil {
+		enabled = *b.Enabled
+	}
+	res, err := h.allow.CreateBulk(b.Hosts, enabled)
+	if err != nil {
+		writeUsecaseErr(w, err)
+		return
+	}
+	added := make([]map[string]any, 0, len(res.Added))
+	for _, a := range res.Added {
+		added = append(added, allowlistDTO(a))
+	}
+	failed := make([]map[string]any, 0, len(res.Failed))
+	for _, f := range res.Failed {
+		failed = append(failed, map[string]any{"host": f.Host, "error": f.Error})
+	}
+	WriteOK(w, http.StatusOK, map[string]any{
+		"added": added, "skipped": res.Skipped, "failed": failed,
+		"router_error": res.RouterError,
+	})
+}
+
+// UpdateAllowlist menangani PUT /api/admin/walled-garden/:id.
+func (h *RouterHandler) UpdateAllowlist(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var b allowlistBody
+	if !decodeJSON(w, r, &b) {
+		return
+	}
+	dstHost, enabled := b.DstHost, b.Enabled
+	if dstHost == "" || enabled == nil {
+		cur, err := h.allow.Get(id)
+		if err != nil {
+			writeUsecaseErr(w, err)
+			return
+		}
+		if dstHost == "" {
+			dstHost = cur.DstHost
+		}
+		if enabled == nil {
+			enabled = &cur.Enabled
+		}
+	}
+	a, sync, err := h.allow.Update(id, dstHost, *enabled)
+	if err != nil {
+		writeUsecaseErr(w, err)
+		return
+	}
+	WriteOK(w, http.StatusOK, allowlistSyncDTO(a, sync))
+}
+
+// DeleteAllowlist menangani DELETE /api/admin/walled-garden/:id.
+func (h *RouterHandler) DeleteAllowlist(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	sync, err := h.allow.Delete(id)
+	if err != nil {
+		writeUsecaseErr(w, err)
+		return
+	}
+	WriteOK(w, http.StatusOK, map[string]any{
+		"deleted": true, "router_synced": sync.Synced, "router_error": sync.Error,
+	})
 }
 
 // LoginTemplate menangani GET /api/admin/hotspot/login-template (unduh file).

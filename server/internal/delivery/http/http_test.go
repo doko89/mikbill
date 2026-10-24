@@ -44,12 +44,14 @@ func newTestRouter(t *testing.T) http.Handler {
 	gw := newFakeGateway()
 	connUC := usecase.NewConnectionUsecase(conns, box, gw)
 	profUC := usecase.NewProfileUsecase(connUC)
-	provUC := usecase.NewProvisioningUsecase(set, connUC)
+	allowRepo := sqlite.NewAllowlistRepo(db)
+	allowUC := usecase.NewAllowlistUsecase(allowRepo, set, connUC)
+	provUC := usecase.NewProvisioningUsecase(set, connUC, allowRepo)
 	hotUC := usecase.NewHotspotUsecase(set)
 	return deliveryhttp.NewRouter(deliveryhttp.Deps{
 		Setup: usecase.NewSetupUsecase(admins, conns, set, h, box, connUC, provUC),
 		Auth:  usecase.NewAuthUsecase(admins, sessions, set, h, crypto.RandomBytes),
-		Conn:  connUC, Prof: profUC, Prov: provUC, Hot: hotUC,
+		Conn:  connUC, Prof: profUC, Prov: provUC, Hot: hotUC, Allow: allowUC,
 		Pkgs: usecase.NewPackageUsecase(sqlite.NewPackageRepo(db), profUC),
 		Set:  usecase.NewSettingsUsecase(set, box),
 	})
@@ -324,31 +326,47 @@ func TestAuthLoginLogoutMe(t *testing.T) {
 	}
 }
 
-func TestSecureCookieMengikutiSkema(t *testing.T) {
-	h := newTestRouter(t)
-	doRequest(t, h, "POST", "/api/setup/admin", map[string]string{
-		"name": "O", "username": "owner", "password": "katasandi123",
-	}, nil)
-	doRequest(t, h, "POST", "/api/setup/site", map[string]string{
-		"deploy_mode": "local", "site_url": "http://mikbil.lan",
-		"local_server_ip": "10.10.10.2", "hotspot_login_base": "http://192.168.88.1/login",
-	}, nil)
-	rec, _ := login(t, h, "owner", "katasandi123")
-	if c := sessionCookie(rec); c == nil || c.Secure {
-		t.Fatal("mode lokal (http) cookie tidak boleh Secure")
+func TestSecureCookieMengikutiSkemaRequest(t *testing.T) {
+	newStack := func(t *testing.T) http.Handler {
+		t.Helper()
+		h := newTestRouter(t)
+		doRequest(t, h, "POST", "/api/setup/admin", map[string]string{
+			"name": "O", "username": "owner", "password": "katasandi123",
+		}, nil)
+		// site_url https seperti produksi yang diakses via HTTP langsung.
+		rec := doRequest(t, h, "POST", "/api/setup/site", map[string]string{
+			"deploy_mode": "local", "site_url": "https://portal.opiwifi.my.id",
+			"local_server_ip": "192.168.40.207", "hotspot_login_base": "http://192.168.88.1/login",
+		}, nil)
+		if rec.Code != 200 {
+			t.Fatalf("simpan situs = %d (%s)", rec.Code, rec.Body.String())
+		}
+		return h
+	}
+	loginWith := func(t *testing.T, h http.Handler, target string, headers map[string]string) *http.Cookie {
+		t.Helper()
+		rec := doRequest(t, h, "POST", target, map[string]string{
+			"username": "owner", "password": "katasandi123",
+		}, headers)
+		if rec.Code != 200 {
+			t.Fatalf("login = %d (%s), want 200", rec.Code, rec.Body.String())
+		}
+		return sessionCookie(rec)
 	}
 
-	h2 := newTestRouter(t)
-	doRequest(t, h2, "POST", "/api/setup/admin", map[string]string{
-		"name": "O", "username": "owner", "password": "katasandi123",
-	}, nil)
-	doRequest(t, h2, "POST", "/api/setup/site", map[string]string{
-		"deploy_mode": "vps", "site_url": "https://wifi.contoh.com",
-		"hotspot_login_base": "http://192.168.88.1/login",
-	}, nil)
-	rec, _ = login(t, h2, "owner", "katasandi123")
-	if c := sessionCookie(rec); c == nil || !c.Secure {
-		t.Fatal("mode VPS (https) cookie harus Secure")
+	// HTTP langsung + site_url https: cookie TIDAK boleh Secure, kalau
+	// tidak browser membuangnya dan semua halaman admin 401.
+	if c := loginWith(t, newStack(t), "/api/admin/login", nil); c == nil || c.Secure {
+		t.Fatal("request HTTP langsung harus menghasilkan cookie non-Secure")
+	}
+	// Di belakang reverse proxy TLS: X-Forwarded-Proto https → Secure.
+	if c := loginWith(t, newStack(t), "/api/admin/login",
+		map[string]string{"X-Forwarded-Proto": "https"}); c == nil || !c.Secure {
+		t.Fatal("X-Forwarded-Proto https harus menghasilkan cookie Secure")
+	}
+	// TLS langsung ke Go: Secure.
+	if c := loginWith(t, newStack(t), "https://portal.opiwifi.my.id/api/admin/login", nil); c == nil || !c.Secure {
+		t.Fatal("request TLS langsung harus menghasilkan cookie Secure")
 	}
 }
 

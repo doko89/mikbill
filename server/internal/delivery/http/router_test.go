@@ -294,6 +294,140 @@ func TestAdminProvisioning(t *testing.T) {
 	}
 }
 
+func TestAdminAllowlistCRUD(t *testing.T) {
+	h := newTestRouter(t)
+	cookie, csrf := loginAdmin(t, h)
+	seedSite(t, h)
+	doRequest(t, h, "POST", "/api/admin/connections", map[string]any{
+		"host": "192.168.88.1", "username": "admin", "password": "rahasia",
+	}, csrf, cookie)
+
+	rec := doRequest(t, h, "GET", "/api/admin/walled-garden", nil, nil)
+	if rec.Code != 401 {
+		t.Fatalf("list tanpa sesi = %d, want 401", rec.Code)
+	}
+	rec = doRequest(t, h, "POST", "/api/admin/walled-garden",
+		map[string]string{"dst_host": "api.dana.id"}, nil, cookie)
+	if rec.Code != 403 {
+		t.Fatalf("create tanpa CSRF = %d, want 403", rec.Code)
+	}
+
+	rec = doRequest(t, h, "GET", "/api/admin/walled-garden", nil, nil, cookie)
+	var list []map[string]any
+	_ = json.Unmarshal(mustEnvelope(t, rec).Data, &list)
+	if rec.Code != 200 || len(list) != 0 {
+		t.Fatalf("list awal = %d %v", rec.Code, list)
+	}
+
+	for _, bad := range []string{"", "bukan domain!", "192.168.1.1", "wifi.contoh.com"} {
+		rec = doRequest(t, h, "POST", "/api/admin/walled-garden",
+			map[string]string{"dst_host": bad}, csrf, cookie)
+		if rec.Code != 400 {
+			t.Fatalf("create %q = %d, want 400", bad, rec.Code)
+		}
+	}
+
+	rec = doRequest(t, h, "POST", "/api/admin/walled-garden",
+		map[string]string{"dst_host": "API.DANA.id."}, csrf, cookie)
+	if rec.Code != 201 {
+		t.Fatalf("create = %d (%s), want 201", rec.Code, rec.Body.String())
+	}
+	var created map[string]any
+	_ = json.Unmarshal(mustEnvelope(t, rec).Data, &created)
+	if created["dst_host"] != "api.dana.id" || created["enabled"] != true {
+		t.Fatalf("created = %v", created)
+	}
+	if created["router_synced"] != true {
+		t.Fatalf("router_synced = %v, want true", created["router_synced"])
+	}
+	id := fmt.Sprintf("%.0f", created["id"])
+
+	rec = doRequest(t, h, "POST", "/api/admin/walled-garden",
+		map[string]string{"dst_host": "api.dana.id"}, csrf, cookie)
+	if rec.Code != 409 {
+		t.Fatalf("duplikat = %d, want 409", rec.Code)
+	}
+
+	rec = doRequest(t, h, "PUT", "/api/admin/walled-garden/"+id,
+		map[string]any{"enabled": false}, csrf, cookie)
+	if rec.Code != 200 {
+		t.Fatalf("disable = %d (%s), want 200", rec.Code, rec.Body.String())
+	}
+	var updated map[string]any
+	_ = json.Unmarshal(mustEnvelope(t, rec).Data, &updated)
+	if updated["dst_host"] != "api.dana.id" || updated["enabled"] != false {
+		t.Fatalf("updated = %v", updated)
+	}
+
+	rec = doRequest(t, h, "PUT", "/api/admin/walled-garden/999",
+		map[string]any{"enabled": true}, csrf, cookie)
+	if rec.Code != 400 {
+		t.Fatalf("update id asing = %d, want 400", rec.Code)
+	}
+
+	rec = doRequest(t, h, "DELETE", "/api/admin/walled-garden/"+id, nil, csrf, cookie)
+	if rec.Code != 200 {
+		t.Fatalf("delete = %d (%s), want 200", rec.Code, rec.Body.String())
+	}
+	rec = doRequest(t, h, "DELETE", "/api/admin/walled-garden/"+id, nil, csrf, cookie)
+	if rec.Code != 400 {
+		t.Fatalf("hapus ganda = %d, want 400", rec.Code)
+	}
+
+	rec = doRequest(t, h, "GET", "/api/admin/walled-garden", nil, nil, cookie)
+	_ = json.Unmarshal(mustEnvelope(t, rec).Data, &list)
+	if len(list) != 0 {
+		t.Fatalf("list setelah hapus = %v", list)
+	}
+}
+
+func TestAdminAllowlistBulk(t *testing.T) {
+	h := newTestRouter(t)
+	cookie, csrf := loginAdmin(t, h)
+	seedSite(t, h)
+	doRequest(t, h, "POST", "/api/admin/connections", map[string]any{
+		"host": "192.168.88.1", "username": "admin", "password": "rahasia",
+	}, csrf, cookie)
+
+	rec := doRequest(t, h, "POST", "/api/admin/walled-garden/bulk",
+		map[string]any{"hosts": []string{"api.dana.id"}}, nil, cookie)
+	if rec.Code != 403 {
+		t.Fatalf("bulk tanpa CSRF = %d, want 403", rec.Code)
+	}
+
+	rec = doRequest(t, h, "POST", "/api/admin/walled-garden/bulk",
+		map[string]any{"hosts": []string{"api.dana.id", "*.dana.id", "salah!"}},
+		csrf, cookie)
+	if rec.Code != 200 {
+		t.Fatalf("bulk = %d (%s), want 200", rec.Code, rec.Body.String())
+	}
+	var res map[string]any
+	_ = json.Unmarshal(mustEnvelope(t, rec).Data, &res)
+	if len(res["added"].([]any)) != 2 || len(res["failed"].([]any)) != 1 {
+		t.Fatalf("bulk = %v", res)
+	}
+	if res["router_error"] != "" {
+		t.Fatalf("router_error = %v", res["router_error"])
+	}
+
+	rec = doRequest(t, h, "POST", "/api/admin/walled-garden/bulk",
+		map[string]any{"hosts": []string{"api.dana.id"}}, csrf, cookie)
+	_ = json.Unmarshal(mustEnvelope(t, rec).Data, &res)
+	if len(res["added"].([]any)) != 0 || len(res["skipped"].([]any)) != 1 {
+		t.Fatalf("bulk ulang = %v, want skipped", res)
+	}
+
+	many := make([]string, 101)
+	for i := range many {
+		many[i] = "host.example.id"
+	}
+	rec = doRequest(t, h, "POST", "/api/admin/walled-garden/bulk",
+		map[string]any{"hosts": many}, csrf, cookie)
+	if rec.Code != 400 {
+		t.Fatalf("bulk > 100 = %d, want 400", rec.Code)
+	}
+}
+
 func TestAdminHotspotTemplateSnippet(t *testing.T) {
 	h := newTestRouter(t)
 	cookie, _ := loginAdmin(t, h)

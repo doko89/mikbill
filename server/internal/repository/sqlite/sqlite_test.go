@@ -28,7 +28,7 @@ func TestMigrateSemuaTabel(t *testing.T) {
 	want := []string{
 		"admins", "settings", "mikrotik_connections", "packages",
 		"orders", "vouchers", "webhook_deliveries", "audit_logs",
-		"sessions", "schema_migrations",
+		"sessions", "walled_garden_allowlist", "schema_migrations",
 	}
 	for _, table := range want {
 		var name string
@@ -52,8 +52,9 @@ func TestMigrateSemuaTabel(t *testing.T) {
 		versions = append(versions, version)
 	}
 	rows.Close()
-	if len(versions) != 2 || versions[0] != "001_init.sql" || versions[1] != "002_drop_package_validity.sql" {
-		t.Fatalf("versi = %v, want 001 + 002", versions)
+	if len(versions) != 3 || versions[0] != "001_init.sql" ||
+		versions[1] != "002_drop_package_validity.sql" || versions[2] != "003_allowlist.sql" {
+		t.Fatalf("versi = %v, want 001 + 002 + 003", versions)
 	}
 	cols, err := db.Query(`SELECT name FROM pragma_table_info('packages')`)
 	if err != nil {

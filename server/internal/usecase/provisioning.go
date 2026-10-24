@@ -12,11 +12,12 @@ import (
 type ProvisioningUsecase struct {
 	set   SettingsRepository
 	conns *ConnectionUsecase
+	allow AllowlistRepository
 }
 
 // NewProvisioningUsecase membuat ProvisioningUsecase.
-func NewProvisioningUsecase(set SettingsRepository, conns *ConnectionUsecase) *ProvisioningUsecase {
-	return &ProvisioningUsecase{set: set, conns: conns}
+func NewProvisioningUsecase(set SettingsRepository, conns *ConnectionUsecase, allow AllowlistRepository) *ProvisioningUsecase {
+	return &ProvisioningUsecase{set: set, conns: conns, allow: allow}
 }
 
 // provisionPlan adalah ekspektasi provisioning dari settings.
@@ -107,6 +108,12 @@ func (u *ProvisioningUsecase) Apply() ([]domain.ProvisionStep, error) {
 		steps = append(steps, domain.ProvisionStep{Step: "walled-garden", OK: false, Message: shortErr(err)})
 		return steps, nil
 	}
+	allows, err := u.allow.List()
+	if err != nil {
+		steps = append(steps, domain.ProvisionStep{Step: "walled-garden", OK: false,
+			Message: "gagal membaca allowlist: " + shortErr(err)})
+		return steps, nil
+	}
 	for _, e := range wg {
 		if e.Comment == domain.RouterCommentMikbil {
 			_ = sess.RemoveWalledGarden(e.ID)
@@ -118,19 +125,35 @@ func (u *ProvisioningUsecase) Apply() ([]domain.ProvisionStep, error) {
 	} else {
 		want = []domain.WalledGardenEntry{{DstAddress: p.localIP}, {DstHost: p.host}}
 	}
+	allowCount := 0
+	for _, a := range allows {
+		if a.Enabled {
+			want = append(want, domain.WalledGardenEntry{DstHost: a.DstHost})
+			allowCount++
+		}
+	}
 	added := 0
+	var firstErr string
 	for _, e := range want {
 		if err := sess.AddWalledGarden(e); err == nil {
 			added++
+		} else if firstErr == "" {
+			firstErr = shortErr(err)
 		}
 	}
 	if added != len(want) {
-		steps = append(steps, domain.ProvisionStep{Step: "walled-garden", OK: false,
-			Message: fmt.Sprintf("hanya %d dari %d entri tertulis", added, len(want))})
-		return steps, nil
+		msg := fmt.Sprintf("hanya %d dari %d entri tertulis", added, len(want))
+		if firstErr != "" {
+			msg += ": " + firstErr
+		}
+		steps = append(steps, domain.ProvisionStep{Step: "walled-garden", OK: false, Message: msg})
+	} else if allowCount > 0 {
+		steps = append(steps, domain.ProvisionStep{Step: "walled-garden", OK: true,
+			Message: fmt.Sprintf("%d entri walled garden ditulis (%d allowlist)", added, allowCount)})
+	} else {
+		steps = append(steps, domain.ProvisionStep{Step: "walled-garden", OK: true,
+			Message: fmt.Sprintf("%d entri walled garden ditulis", added)})
 	}
-	steps = append(steps, domain.ProvisionStep{Step: "walled-garden", OK: true,
-		Message: fmt.Sprintf("%d entri walled garden ditulis", added)})
 
 	// Langkah DNS statik: mode lokal saja.
 	if p.mode == domain.DeployLocal {
@@ -139,14 +162,19 @@ func (u *ProvisioningUsecase) Apply() ([]domain.ProvisionStep, error) {
 			steps = append(steps, domain.ProvisionStep{Step: "dns-statik", OK: false, Message: shortErr(err)})
 			return steps, nil
 		}
+		exists := false
 		for _, e := range dns {
 			if e.Comment == domain.RouterCommentMikbil {
 				_ = sess.RemoveStaticDNS(e.ID)
+			} else if e.Name == p.host && e.Address == p.localIP {
+				exists = true
 			}
 		}
-		if err := sess.AddStaticDNS(domain.StaticDNSEntry{Name: p.host, Address: p.localIP}); err != nil {
-			steps = append(steps, domain.ProvisionStep{Step: "dns-statik", OK: false, Message: shortErr(err)})
-			return steps, nil
+		if !exists {
+			if err := sess.AddStaticDNS(domain.StaticDNSEntry{Name: p.host, Address: p.localIP}); err != nil {
+				steps = append(steps, domain.ProvisionStep{Step: "dns-statik", OK: false, Message: shortErr(err)})
+				return steps, nil
+			}
 		}
 		msg := p.host + " mengarah ke " + p.localIP
 		allow, err := sess.DNSAllowRemoteRequests()
@@ -220,9 +248,9 @@ func (u *ProvisioningUsecase) statusWith(sess RouterSession, p provisionPlan) (d
 		}
 	}
 
-	wg, err := sess.ListWalledGarden()
-	if err != nil {
-		st.Checks = append(st.Checks, domain.ProvisionCheck{Name: "walled-garden", OK: false, Message: shortErr(err)})
+	wg, wgErr := sess.ListWalledGarden()
+	if wgErr != nil {
+		st.Checks = append(st.Checks, domain.ProvisionCheck{Name: "walled-garden", OK: false, Message: shortErr(wgErr)})
 	} else {
 		var want, found []string
 		if p.mode == domain.DeployVPS {
@@ -252,6 +280,44 @@ func (u *ProvisioningUsecase) statusWith(sess RouterSession, p provisionPlan) (d
 				Message: "entri walled garden Mikbil belum lengkap"})
 		} else {
 			st.Checks = append(st.Checks, domain.ProvisionCheck{Name: "walled-garden", OK: true, Message: "entri walled garden lengkap"})
+		}
+	}
+
+	allows, err := u.allow.List()
+	switch {
+	case err != nil:
+		st.Checks = append(st.Checks, domain.ProvisionCheck{Name: "allowlist", OK: false, Message: shortErr(err)})
+	case wgErr != nil:
+		st.Checks = append(st.Checks, domain.ProvisionCheck{Name: "allowlist", OK: false, Message: "tidak bisa membaca walled garden router"})
+	default:
+		var enabled []string
+		for _, a := range allows {
+			if a.Enabled {
+				enabled = append(enabled, a.DstHost)
+			}
+		}
+		if len(enabled) == 0 {
+			st.Checks = append(st.Checks, domain.ProvisionCheck{Name: "allowlist", OK: true, Message: "tidak ada host allowlist"})
+			break
+		}
+		present := map[string]bool{}
+		for _, e := range wg {
+			if e.Comment == domain.RouterCommentMikbil && !e.Disabled && e.DstHost != "" {
+				present[e.DstHost] = true
+			}
+		}
+		missingCount := 0
+		for _, h := range enabled {
+			if !present[h] {
+				missingCount++
+			}
+		}
+		if missingCount > 0 {
+			st.Checks = append(st.Checks, domain.ProvisionCheck{Name: "allowlist", OK: false,
+				Message: fmt.Sprintf("%d dari %d host allowlist belum ada di router", missingCount, len(enabled))})
+		} else {
+			st.Checks = append(st.Checks, domain.ProvisionCheck{Name: "allowlist", OK: true,
+				Message: fmt.Sprintf("%d host allowlist lengkap", len(enabled))})
 		}
 	}
 

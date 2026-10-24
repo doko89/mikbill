@@ -2,10 +2,23 @@ package http
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/mikbil/mikbil/internal/usecase"
 )
+
+// secureCookieFor menentukan flag Secure dari skema request aktual: TLS
+// langsung atau X-Forwarded-Proto=https di belakang reverse proxy. Skema
+// konfigurasi (site_url) tidak dipakai: cookie Secure yang diterima lewat
+// HTTP dibuang browser sehingga semua halaman admin 401.
+func secureCookieFor(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	proto, _, _ := strings.Cut(r.Header.Get("X-Forwarded-Proto"), ",")
+	return strings.EqualFold(strings.TrimSpace(proto), "https")
+}
 
 // AdminHandler menangani auth admin (tech_spec 4.4).
 type AdminHandler struct {
@@ -38,7 +51,7 @@ func (h *AdminHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   h.auth.SecureCookie(),
+		Secure:   secureCookieFor(r),
 		SameSite: http.SameSiteLaxMode,
 		Expires:  sess.ExpiresAt,
 		MaxAge:   int(time.Until(sess.ExpiresAt).Seconds()),
@@ -61,7 +74,7 @@ func (h *AdminHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   h.auth.SecureCookie(),
+		Secure:   secureCookieFor(r),
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})

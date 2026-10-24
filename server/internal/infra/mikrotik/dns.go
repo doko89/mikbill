@@ -1,6 +1,22 @@
 package mikrotik
 
-import "github.com/mikbil/mikbil/internal/domain"
+import (
+	"errors"
+	"strings"
+
+	"github.com/mikbil/mikbil/internal/domain"
+)
+
+// parseAllowRemoteRequests menafsirkan nilai allow-remote-requests dari
+// /ip/dns/print. RouterOS v6 mengembalikan "yes"/"no", v7 "true"/"false".
+func parseAllowRemoteRequests(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "yes", "true", "1":
+		return true
+	default:
+		return false
+	}
+}
 
 // ListStaticDNS membaca /ip/dns/static/print.
 func (s *Session) ListStaticDNS() ([]domain.StaticDNSEntry, error) {
@@ -41,9 +57,9 @@ func (s *Session) DNSAllowRemoteRequests() (bool, error) {
 		return false, err
 	}
 	if len(r.Re) == 0 {
-		return false, nil
+		return false, errors.New("/ip/dns/print tidak mengembalikan data")
 	}
-	return r.Re[0].Map["allow-remote-requests"] == "yes", nil
+	return parseAllowRemoteRequests(r.Re[0].Map["allow-remote-requests"]), nil
 }
 
 // SetDNSAllowRemoteRequests menjalankan /ip/dns/set allow-remote-requests=.

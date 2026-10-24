@@ -18,6 +18,7 @@ type Deps struct {
 	Prof   *usecase.ProfileUsecase
 	Prov   *usecase.ProvisioningUsecase
 	Hot    *usecase.HotspotUsecase
+	Allow  *usecase.AllowlistUsecase
 	Pkgs   *usecase.PackageUsecase
 	Ord    *usecase.OrderUsecase
 	Pay    *usecase.PaymentUsecase
@@ -36,7 +37,7 @@ func NewRouter(d Deps) http.Handler {
 
 	setup := NewSetupHandler(d.Setup)
 	admin := NewAdminHandler(d.Auth)
-	router := NewRouterHandler(d.Conn, d.Prof, d.Prov, d.Hot)
+	router := NewRouterHandler(d.Conn, d.Prof, d.Prov, d.Hot, d.Allow)
 	pkgs := NewPackageHandler(d.Pkgs)
 	ord := NewOrderHandler(d.Ord)
 	hook := NewWebhookHandler(d.Pay)
@@ -79,6 +80,11 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/router/profiles", router.CreateProfile)
 			r.Get("/provisioning/status", router.ProvisioningStatus)
 			r.Post("/provisioning/apply", router.ProvisioningApply)
+			r.Get("/walled-garden", router.ListAllowlist)
+			r.Post("/walled-garden", router.CreateAllowlist)
+			r.Post("/walled-garden/bulk", router.CreateAllowlistBulk)
+			r.Put("/walled-garden/{id}", router.UpdateAllowlist)
+			r.Delete("/walled-garden/{id}", router.DeleteAllowlist)
 			r.Get("/hotspot/login-template", router.LoginTemplate)
 			r.Get("/hotspot/button-snippet", router.ButtonSnippet)
 			r.Get("/packages", pkgs.List)

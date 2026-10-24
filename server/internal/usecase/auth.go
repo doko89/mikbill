@@ -102,16 +102,6 @@ func (u *AuthUsecase) Logout(token string) error {
 	return u.sessions.Delete(HashToken(token))
 }
 
-// SecureCookie melaporkan apakah cookie sesi harus bertanda Secure.
-// True kecuali site_url memakai http:// (mode server lokal).
-func (u *AuthUsecase) SecureCookie() bool {
-	v, found, err := u.set.Get(domain.SettingSiteURL)
-	if err != nil || !found {
-		return true
-	}
-	return !strings.HasPrefix(v, "http://")
-}
-
 // HashToken menghitung id sesi dari token mentah cookie.
 func HashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))

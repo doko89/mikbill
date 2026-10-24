@@ -111,7 +111,7 @@ func newOrderStack(t *testing.T) orderStack {
 	gw := newFakeGateway()
 	connUC := usecase.NewConnectionUsecase(conns, box, gw)
 	profUC := usecase.NewProfileUsecase(connUC)
-	provUC := usecase.NewProvisioningUsecase(set, connUC)
+	provUC := usecase.NewProvisioningUsecase(set, connUC, sqlite.NewAllowlistRepo(db))
 	hotUC := usecase.NewHotspotUsecase(set)
 	setupUC := usecase.NewSetupUsecase(admins, conns, set, testHasher{}, box, connUC, provUC)
 	orderUC := usecase.NewOrderUsecase(orders, vouch, pkgRepo, set, box, factory)

@@ -4,10 +4,10 @@ frontend:
 	cd frontend && npm ci && npm run build && rm -rf ../server/web/dist && cp -r dist ../server/web/dist
 
 build: frontend
-	cd server && go build -o ../bin/mikbil ./cmd/mikbil
+	cd server && GOOS=linux GOARCH=arm64 go build  -ldflags "-s -w" -trimpath -o ../bin/mikbil ./cmd/mikbil
 
 build-be:
-	cd server && go build -o ../bin/mikbil ./cmd/mikbil
+	cd server && GOOS=linux GOARCH=arm64 go build  -ldflags "-s -w" -trimpath -o ../bin/mikbil ./cmd/mikbil
 
 test: test-go
 

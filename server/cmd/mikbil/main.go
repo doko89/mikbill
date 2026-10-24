@@ -156,7 +156,9 @@ func cmdServe() {
 	gw := mikrotik.Gateway{}
 	connUC := usecase.NewConnectionUsecase(conns, box, gwAdapter{gw})
 	profUC := usecase.NewProfileUsecase(connUC)
-	provUC := usecase.NewProvisioningUsecase(set, connUC)
+	allowRepo := sqlite.NewAllowlistRepo(db)
+	allowUC := usecase.NewAllowlistUsecase(allowRepo, set, connUC)
+	provUC := usecase.NewProvisioningUsecase(set, connUC, allowRepo)
 	hotUC := usecase.NewHotspotUsecase(set)
 	setup := usecase.NewSetupUsecase(admins, conns, set, h, box, connUC, provUC)
 	auth := usecase.NewAuthUsecase(admins, sessions, set, h, infra.RandomBytes)
@@ -200,7 +202,7 @@ func cmdServe() {
 	if err := http.ListenAndServe(addr, deliveryhttp.NewRouter(deliveryhttp.Deps{
 		Setup: setup, Auth: auth, Conn: connUC, Prof: profUC, Prov: provUC,
 		Hot: hotUC, Pkgs: pkgUC, Ord: orderUC, Pay: payUC, Adm: adminUC,
-		Health: healthUC, Set: setUC,
+		Health: healthUC, Set: setUC, Allow: allowUC,
 	})); err != nil {
 		fmt.Fprintln(os.Stderr, "server berhenti:", err)
 		os.Exit(1)
