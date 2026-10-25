@@ -5,6 +5,22 @@ dan frontend React (di-embed), dengan SQLite sebagai satu-satunya state eksterna
 
 Dokumen acuan: `docs/PRD.md`, `docs/tech_spec.md`, `docs/DESIGN_GUIDE.md`.
 
+## Instalasi
+
+Panduan lengkap: [docs/INSTALL.md](docs/INSTALL.md).
+
+```sh
+# Linux: pasang rilis terbaru (idempotent, aman untuk upgrade)
+curl -fsSL https://raw.githubusercontent.com/doko89/mikbill/main/deploy/install.sh | sudo bash
+```
+
+```powershell
+# Windows (PowerShell sebagai Administrator): pasang rilis terbaru
+irm https://raw.githubusercontent.com/doko89/mikbill/main/deploy/install.ps1 | iex
+```
+
+Selesai → buka `http://<ip-server>:8080/setup` untuk wizard penyiapan awal.
+
 ## Struktur
 
 ```

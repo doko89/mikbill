@@ -19,8 +19,8 @@ import (
 	"github.com/mikbil/mikbil/internal/usecase"
 )
 
-// Version adalah versi binary.
-const Version = "0.1.0"
+// Version adalah versi binary; diisi ulang saat rilis via -X main.Version=<tag>.
+var Version = "0.1.0"
 
 type hasher struct{}
 
