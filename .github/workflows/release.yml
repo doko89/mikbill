@@ -64,6 +64,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: stable
+          cache-dependency-path: server/go.sum
       - name: Pasang dist segar (ganti bawaan checkout)
         uses: actions/download-artifact@v4
         with:
@@ -150,8 +151,8 @@ jobs:
           cat checksums.txt | sed 's/^/sha256: /'
           TAG="$GITHUB_REF_NAME"
           NOTES="Mikbil $TAG. Verifikasi unduhan dengan checksums.txt (sha256)."
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" --clobber mikbil_* checksums.txt
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber mikbil_* checksums.txt
           else
-            gh release create "$TAG" --title "$TAG" --notes "$NOTES" mikbil_* checksums.txt
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes "$NOTES" mikbil_* checksums.txt
           fi

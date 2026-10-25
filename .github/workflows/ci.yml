@@ -26,6 +26,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: stable
+          cache-dependency-path: server/go.sum
       - name: Build
         working-directory: server
         run: go build ./...
