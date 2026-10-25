@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
-:root {
+/* Nilai --accent/--accent-ink final disetel JS (lib/theme.ts);
+   nilai di sini hanya fallback sebelum JS jalan. */
+:root,
+:root[data-theme="light"] {
   --surface: #ffffff;
   --surface-2: #f4f4f5;
   --text: #18181b;
@@ -11,8 +14,19 @@
   --danger: #dc2626;
 }
 
+:root[data-theme="dark"] {
+  --surface: #09090b;
+  --surface-2: #18181b;
+  --text: #fafafa;
+  --text-2: #a1a1aa;
+  --line: #27272a;
+  --accent: #10b981;
+  --accent-ink: #052e16;
+  --danger: #dc2626;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
     --surface: #09090b;
     --surface-2: #18181b;
     --text: #fafafa;
@@ -20,6 +34,7 @@
     --line: #27272a;
     --accent: #10b981;
     --accent-ink: #052e16;
+    --danger: #dc2626;
   }
 }
 

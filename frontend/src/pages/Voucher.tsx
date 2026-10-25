@@ -13,6 +13,7 @@ import {
 } from "@phosphor-icons/react";
 import { ApiError, api } from "../lib/api";
 import { rupiah } from "../lib/format";
+import { useTheme } from "../store/theme";
 
 type Paket = {
   id: number;
@@ -92,7 +93,7 @@ function unduhVoucher(order: OrderDetail, format: FormatGambar) {
   ctx.textAlign = "center";
   ctx.fillStyle = aksen;
   ctx.font = "800 64px Outfit, system-ui, sans-serif";
-  ctx.fillText("Mikbil", W / 2, 140);
+  ctx.fillText(useTheme.getState().brand_name, W / 2, 140, W - 160);
   ctx.fillStyle = teks2;
   ctx.font = "500 34px Outfit, system-ui, sans-serif";
   ctx.fillText("Voucher WiFi", W / 2, 195);

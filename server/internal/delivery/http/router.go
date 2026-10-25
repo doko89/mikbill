@@ -25,6 +25,7 @@ type Deps struct {
 	Adm    *usecase.AdminOrderUsecase
 	Health *usecase.HealthUsecase
 	Set    *usecase.SettingsUsecase
+	Theme  *usecase.ThemeUsecase
 }
 
 // NewRouter menyusun semua route API dan file statis frontend.
@@ -43,6 +44,7 @@ func NewRouter(d Deps) http.Handler {
 	hook := NewWebhookHandler(d.Pay)
 	adm := NewAdminOrderHandler(d.Adm)
 	set := NewSettingsHandler(d.Set)
+	theme := NewThemeHandler(d.Theme)
 	lim := newRateLimiter()
 
 	r.Route("/api", func(r chi.Router) {
@@ -52,6 +54,8 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/health", NewHealthHandler(d.Health).Get)
 		}
 		r.Get("/packages", pkgs.ListPublic)
+		r.With(lim.limit(120, rateWindow, ipKey)).Get("/theme", theme.Get)
+		r.With(lim.limit(120, rateWindow, ipKey)).Get("/theme/logo", theme.Logo)
 		r.With(lim.limit(10, rateWindow, ipKey)).Post("/orders", ord.Create)
 		r.With(lim.limit(30, rateWindow, ipPathKey)).Get("/orders/{id}", ord.Get)
 		r.Post("/orders/{id}/cancel", ord.Cancel)
@@ -93,6 +97,8 @@ func NewRouter(d Deps) http.Handler {
 			r.Delete("/packages/{id}", pkgs.Delete)
 			r.Get("/settings", set.Get)
 			r.Put("/settings", set.Update)
+			r.Put("/theme/logo", theme.UploadLogo)
+			r.Delete("/theme/logo", theme.DeleteLogo)
 			r.Get("/orders/summary", adm.Summary)
 			r.Get("/orders", adm.List)
 			r.Get("/orders/{id}", adm.Get)

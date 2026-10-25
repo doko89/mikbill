@@ -22,6 +22,13 @@ type SettingsRepository interface {
 	Set(key, val string) error
 }
 
+// ThemeAssetRepository port aset biner tema (logo).
+type ThemeAssetRepository interface {
+	Get(key string) (domain.ThemeAsset, bool, error)
+	Set(key, mime string, data []byte) error
+	Delete(key string) error
+}
+
 // ConnectionRepository port koneksi MikroTik.
 type ConnectionRepository interface {
 	CreateActive(c domain.Connection) (domain.Connection, error)

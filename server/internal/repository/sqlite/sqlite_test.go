@@ -28,7 +28,7 @@ func TestMigrateSemuaTabel(t *testing.T) {
 	want := []string{
 		"admins", "settings", "mikrotik_connections", "packages",
 		"orders", "vouchers", "webhook_deliveries", "audit_logs",
-		"sessions", "walled_garden_allowlist", "schema_migrations",
+		"sessions", "walled_garden_allowlist", "theme_assets", "schema_migrations",
 	}
 	for _, table := range want {
 		var name string
@@ -52,9 +52,10 @@ func TestMigrateSemuaTabel(t *testing.T) {
 		versions = append(versions, version)
 	}
 	rows.Close()
-	if len(versions) != 3 || versions[0] != "001_init.sql" ||
-		versions[1] != "002_drop_package_validity.sql" || versions[2] != "003_allowlist.sql" {
-		t.Fatalf("versi = %v, want 001 + 002 + 003", versions)
+	if len(versions) != 4 || versions[0] != "001_init.sql" ||
+		versions[1] != "002_drop_package_validity.sql" || versions[2] != "003_allowlist.sql" ||
+		versions[3] != "004_theme.sql" {
+		t.Fatalf("versi = %v, want 001 + 002 + 003 + 004", versions)
 	}
 	cols, err := db.Query(`SELECT name FROM pragma_table_info('packages')`)
 	if err != nil {
@@ -121,6 +122,28 @@ func TestSettingsRepo(t *testing.T) {
 	v, _, _ = r.Get("site_url")
 	if v != "https://baru.id" {
 		t.Fatalf("upsert gagal: %q", v)
+	}
+}
+
+func TestThemeRepo(t *testing.T) {
+	db := openMigrated(t)
+	r := NewThemeRepo(db)
+	if _, found, _ := r.Get(domain.ThemeLogoKey); found {
+		t.Fatal("logo seharusnya belum ada")
+	}
+	data := []byte{0x89, 'P', 'N', 'G'}
+	if err := r.Set(domain.ThemeLogoKey, "image/png", data); err != nil {
+		t.Fatal(err)
+	}
+	a, found, err := r.Get(domain.ThemeLogoKey)
+	if err != nil || !found || a.MIME != "image/png" || string(a.Data) != string(data) {
+		t.Fatalf("Get = %+v, %v, %v", a, found, err)
+	}
+	if err := r.Delete(domain.ThemeLogoKey); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, _ := r.Get(domain.ThemeLogoKey); found {
+		t.Fatal("logo masih ada setelah hapus")
 	}
 }
 

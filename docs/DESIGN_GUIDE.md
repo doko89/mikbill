@@ -3,7 +3,7 @@
 > Panduan desain dan implementasi frontend. Berdampingan dengan [PRD](PRD.md) dan [tech_spec](tech_spec.md).
 > Bahasa UI: Indonesia.
 
-**Design read:** produk payment self-service mobile-first untuk pembeli hotspot Indonesia di HP entry-level, dengan bahasa trust-first, berbasis Tailwind v4 utilities + sans self-hosted + satu aksen emerald.
+**Design read:** produk payment self-service mobile-first untuk pembeli hotspot Indonesia di HP entry-level, dengan bahasa trust-first, berbasis Tailwind v4 utilities + sans self-hosted + satu aksen terkonfigurasi (default emerald).
 
 **DIAL:** `DESIGN_VARIANCE: 4 / MOTION_INTENSITY: 3 / VISUAL_DENSITY: 5`
 Alasan: aplikasi pembayaran butuh prediktabilitas (variance rendah), gerak minimal agar terasa aman dan ringan di HP lemah (motion rendah), dan kepadatan sedang agar info penting (harga, QR, kode) muat tanpa scroll berlebihan.
@@ -28,33 +28,40 @@ Pembeli membuka Mikbil **sebelum login internet**. Hanya domain Mikbil yang lolo
 
 ## 3. Tema, Warna, Bentuk (Lock)
 
-Satu tema lock per halaman: dukung **light + dark via `prefers-color-scheme`** (default ikut sistem). Token:
+Mode gelap/terang dikunci via atribut `data-theme` di `<html>` (`system|light|dark`, dari `GET /api/theme`, cache `localStorage mikbil-theme`): `system`/absen mengikuti `prefers-color-scheme`, `light`/`dark` mengunci token. Token (nilai `--accent` default, diganti `accent_color` saat tema dimuat):
 
 ```css
-:root {
+:root, [data-theme="light"] {
   --surface: #ffffff;
   --surface-2: #f4f4f5;        /* zinc-100 */
   --text: #18181b;             /* zinc-900 */
   --text-2: #52525b;           /* zinc-600 */
   --line: #e4e4e7;             /* zinc-200 */
-  --accent: #059669;           /* emerald-600 */
-  --accent-ink: #ffffff;       /* teks di atas aksen */
+  --accent: #059669;           /* default; dioverride accent_color */
+  --accent-ink: #ffffff;       /* otomatis dari luminance, lihat bawah */
   --danger: #dc2626;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]), [data-theme="system"] {
     --surface: #09090b;
     --surface-2: #18181b;
     --text: #fafafa;
     --text-2: #a1a1aa;
     --line: #27272a;
-    --accent: #10b981;         /* emerald-500 agar kontras di gelap */
-    --accent-ink: #052e16;
   }
+}
+[data-theme="dark"] {
+  --surface: #09090b;
+  --surface-2: #18181b;
+  --text: #fafafa;
+  --text-2: #a1a1aa;
+  --line: #27272a;
 }
 ```
 
-- **Aksen tunggal: emerald.** Terkunci di seluruh halaman (CTA, harga aktif, status sukses, link). Dilarang aksen kedua (tidak ada ungu/biru neon).
+- **Satu aksen terkonfigurasi (default emerald `#059669`).** Nilai dari `accent_color`; dipakai di seluruh halaman (CTA, harga aktif, status sukses, link). Dilarang aksen kedua (tidak ada ungu/biru neon).
+- **`--accent-ink` otomatis dari luminance aksen** (hitung di JS, tanpa `color-mix` CSS): aksen gelap → `#ffffff`, aksen terang → `#052e16`. Mode gelap: cerahkan aksen ~15% di JS agar kontras.
+- **Logo:** dari `logo_url` (origin Mikbil sendiri, PNG/JPEG ≤ 512KB, ≤ 1024px). Bila `logo_url` null, fallback ikon bawaan yang dibundel (bukan gambar eksternal). Logo tidak boleh menggeser layout saat gagal dimuat (fallback otomatis).
 - **Shape lock:** radius `12px` kartu, `10px` tombol/input. Dokumentasikan bila tombol pill, lalu konsisten.
 - Dilarang `#000000`/`#ffffff` murni sebagai background besar (pakai zinc-950 / white dengan tint).
 
@@ -129,7 +136,8 @@ Render dan klik tiap halaman pada: **360px, 375px, 390px, 768px, 1024px, 1440px*
 - [ ] Lolos matriks §5.3 (6 lebar × 2 tema), tanpa scroll-x.
 - [ ] CTA primer terlihat tanpa scroll di `/bayar` dan `/voucher` pada 360px.
 - [ ] Semua aset dari origin sendiri (cek Network: tidak ada request font/CDN/gambar eksternal).
-- [ ] Satu aksen emerald di semua komponen; satu sistem radius.
+- [ ] Satu aksen terkonfigurasi di semua komponen (default emerald); satu sistem radius.
+- [ ] Tema: logo tampil bila ada dan fallback ikon rapi bila tidak; 3 mode (`system`/`light`/`dark`) benar; teks di atas aksen custom tetap kontras (cek aksen terang dan gelap).
 - [ ] Tidak ada em-dash di seluruh string tampilan.
 - [ ] Skeleton/empty/error state ada untuk tiap fetch data.
 - [ ] `prefers-reduced-motion` diuji (animasi mati total).

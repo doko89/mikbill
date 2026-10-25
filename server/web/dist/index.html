@@ -6,8 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Mikbil: beli voucher WiFi mandiri dengan QRIS." />
     <title>Mikbil</title>
-    <script type="module" crossorigin src="/assets/index-BJNOiIy5.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-DNjnXm5b.css">
+    <!-- Cegah flash tema: terapkan cache sebelum render. -->
+    <script>
+      try {
+        var t = JSON.parse(localStorage.getItem("mikbil-theme") || "null");
+        if (t) {
+          var r = document.documentElement;
+          if (t.theme_mode) r.setAttribute("data-theme", t.theme_mode);
+          if (t.accent_color) r.style.setProperty("--accent", t.accent_color);
+        }
+      } catch (e) {}
+    </script>
+    <script type="module" crossorigin src="/assets/index-g3b0T4V4.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BUxEoWw0.css">
   </head>
   <body>
     <div id="root"></div>

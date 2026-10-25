@@ -194,6 +194,7 @@ func cmdServe() {
 	adminUC := usecase.NewAdminOrderUsecase(orders, vouchers, pkgRepo, set, box, payUC)
 	healthUC := usecase.NewHealthUsecase(db, conns, skewAdapter{skewRec})
 	setUC := usecase.NewSettingsUsecase(set, box)
+	themeUC := usecase.NewThemeUsecase(set, sqlite.NewThemeRepo(db))
 
 	go runPoller(payUC)
 
@@ -202,7 +203,7 @@ func cmdServe() {
 	if err := http.ListenAndServe(addr, deliveryhttp.NewRouter(deliveryhttp.Deps{
 		Setup: setup, Auth: auth, Conn: connUC, Prof: profUC, Prov: provUC,
 		Hot: hotUC, Pkgs: pkgUC, Ord: orderUC, Pay: payUC, Adm: adminUC,
-		Health: healthUC, Set: setUC, Allow: allowUC,
+		Health: healthUC, Set: setUC, Allow: allowUC, Theme: themeUC,
 	})); err != nil {
 		fmt.Fprintln(os.Stderr, "server berhenti:", err)
 		os.Exit(1)

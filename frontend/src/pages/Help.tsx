@@ -1,8 +1,9 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft, Keyboard, QrCode, WifiHigh } from "@phosphor-icons/react";
+import { useTheme } from "../store/theme";
 
-const CARA_BELI = [
-  "Hubungkan HP ke WiFi hotspot, lalu buka halaman katalog Mikbil.",
+const caraBeli = (merek: string) => [
+  `Hubungkan HP ke WiFi hotspot, lalu buka halaman katalog ${merek}.`,
   "Pilih paket sesuai kebutuhan, lalu tekan tombol Pilih.",
   "Pindai kode QRIS yang tampil dan selesaikan pembayaran sebelum waktu habis.",
   "Kode voucher tampil di layar. Salin atau unduh sebagai gambar agar tidak hilang.",
@@ -16,6 +17,8 @@ const LOGIN_MANUAL = [
 ];
 
 export default function Bantuan() {
+  const brand_name = useTheme((s) => s.brand_name);
+  const langkahBeli = caraBeli(brand_name);
   return (
     <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col px-4 py-6">
       <header className="mb-5 flex items-center gap-3">
@@ -35,7 +38,7 @@ export default function Bantuan() {
             <QrCode size={22} style={{ color: "var(--accent)" }} /> Cara beli voucher
           </h2>
           <ol className="mt-3 grid gap-2 text-[15px] leading-relaxed">
-            {CARA_BELI.map((langkah, i) => (
+            {langkahBeli.map((langkah, i) => (
               <li key={langkah} className="flex gap-3">
                 <span
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold"

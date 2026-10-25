@@ -19,15 +19,36 @@ type ApiOptions = {
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-// api memanggil backend dan otomatis menyertakan header CSRF
-// untuk request mutasi ke /api/admin/*.
-export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
-  const method = opts.method ?? "GET";
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+function csrfHeaders(method: string, path: string): Record<string, string> {
+  const headers: Record<string, string> = {};
   if (MUTATING.has(method) && path.startsWith("/api/admin")) {
     const csrf = useSession.getState().csrfToken;
     if (csrf) headers[CSRF_HEADER] = csrf;
   }
+  return headers;
+}
+
+async function parseEnvelope<T>(res: Response): Promise<T> {
+  let json: { ok: boolean; data?: T; error?: string; code?: string };
+  try {
+    json = (await res.json()) as typeof json;
+  } catch {
+    throw new ApiError("Respons server tidak valid", res.status);
+  }
+  if (!json.ok) {
+    throw new ApiError(json.error || "Kesalahan server", res.status, json.code);
+  }
+  return json.data as T;
+}
+
+// api memanggil backend dan otomatis menyertakan header CSRF
+// untuk request mutasi ke /api/admin/*.
+export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
+  const method = opts.method ?? "GET";
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...csrfHeaders(method, path),
+  };
   let res: Response;
   try {
     res = await fetch(path, {
@@ -39,14 +60,26 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
   } catch {
     throw new ApiError("Tidak dapat menghubungi server", 0);
   }
-  let json: { ok: boolean; data?: T; error?: string; code?: string };
+  return parseEnvelope<T>(res);
+}
+
+// apiForm mengirim FormData (misal upload berkas) dengan header CSRF
+// yang sama seperti api() untuk request mutasi ke /api/admin/*.
+export async function apiForm<T>(
+  path: string,
+  form: FormData,
+  method: "POST" | "PUT" | "PATCH" | "DELETE" = "POST",
+): Promise<T> {
+  let res: Response;
   try {
-    json = (await res.json()) as typeof json;
+    res = await fetch(path, {
+      method,
+      headers: csrfHeaders(method, path),
+      credentials: "same-origin",
+      body: form,
+    });
   } catch {
-    throw new ApiError("Respons server tidak valid", res.status);
+    throw new ApiError("Tidak dapat menghubungi server", 0);
   }
-  if (!json.ok) {
-    throw new ApiError(json.error || "Kesalahan server", res.status, json.code);
-  }
-  return json.data as T;
+  return parseEnvelope<T>(res);
 }

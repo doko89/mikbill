@@ -12,6 +12,8 @@ import {
 import { ApiError, api } from "../lib/api";
 import { rupiah } from "../lib/format";
 import { useSetupStatus } from "../lib/useSetupStatus";
+import { useTheme } from "../store/theme";
+import Brand from "../components/Brand";
 
 type Paket = {
   id: number;
@@ -36,6 +38,7 @@ function SkeletonCard() {
 
 export default function Home() {
   const { status } = useSetupStatus();
+  const brand_name = useTheme((s) => s.brand_name);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Paket[]>([]);
@@ -97,18 +100,7 @@ export default function Home() {
   return (
     <div className="mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-col px-4 py-6">
       <header className="mb-5 flex items-center gap-3">
-        <span
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px]"
-          style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
-        >
-          <WifiHigh size={24} weight="bold" />
-        </span>
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight">Mikbil</h1>
-          <p className="text-sm" style={{ color: "var(--text-2)" }}>
-            Beli voucher WiFi mandiri
-          </p>
-        </div>
+        <Brand />
         <Link
           to="/bantuan"
           className="btn btn-secondary ml-auto h-11 min-h-[44px] shrink-0 px-3 text-sm"
@@ -124,7 +116,7 @@ export default function Home() {
           className="card mb-4 block p-4 font-semibold"
           style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
         >
-          Selesaikan penyiapan Mikbil lebih dulu
+          Selesaikan penyiapan {brand_name} lebih dulu
         </Link>
       )}
 

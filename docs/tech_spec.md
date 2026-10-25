@@ -71,7 +71,11 @@ CREATE TABLE settings (
 --   local_server_ip(10.10.10.2, mode lokal),
 --   hotspot_login_base(http://192.168.88.1/login),
 --   voucher_length(8), kriskris_api_key, kriskris_api_secret(enc),
---   kriskris_callback_secret(enc)
+--   kriskris_callback_secret(enc),
+--   brand_name(trim 1..40 char, default "Mikbil"),
+--   brand_tagline(trim 0..80 char, default "Beli voucher WiFi mandiri"),
+--   accent_color(hex #rrggbb valid, default #059669),
+--   theme_mode(system|light|dark, default system)
 
 CREATE TABLE mikrotik_connections (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -152,9 +156,17 @@ CREATE TABLE audit_logs (
   meta_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+CREATE TABLE theme_assets (
+  key TEXT PRIMARY KEY,               -- 'logo' (satu-satunya aset v1)
+  mime TEXT NOT NULL,                 -- image/png | image/jpeg
+  data BLOB NOT NULL,                 -- maks 512KB, dimensi maks 1024px (divalidasi saat upload)
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+-- Versi cache logo (?v=8hex) dihitung saat serve dari sha256(data), tidak disimpan di DB.
 ```
 
-Migrasi: file SQL berurutan di `internal/repository/sqlite/migrations/*.sql`, dijalankan saat start (`./mikbil serve` auto-migrate; `./mikbil migrate` manual). `001_init.sql` skema awal; `002_drop_package_validity.sql` menghapus kolom `packages.validity_seconds` (masa aktif ikut profile router); `003_allowlist.sql` tabel `walled_garden_allowlist`.
+Migrasi: file SQL berurutan di `internal/repository/sqlite/migrations/*.sql`, dijalankan saat start (`./mikbil serve` auto-migrate; `./mikbil migrate` manual). `001_init.sql` skema awal; `002_drop_package_validity.sql` menghapus kolom `packages.validity_seconds` (masa aktif ikut profile router); `003_allowlist.sql` tabel `walled_garden_allowlist`; `004_theme.sql` tabel `theme_assets`.
 
 ## 4. API Contract Internal
 
@@ -169,6 +181,8 @@ Base: `<site_url>/api`. Format: JSON. Error: `{ok:false, error:"pesan", code?}` 
 | `GET /api/orders/:id` | — | `{ok, data:{order_id,status,package:{...},total_amount,expires_at,paid_at, voucher?:{username,password,profile_name}, login_url?}}`. `voucher`+`login_url` hanya bila `paid`. Rate-limit: 30 req/menit per IP per order |
 | `POST /api/orders/:id/cancel` | — | `{ok, data:{status:"cancelled"}}` (hanya bila `pending`; backend juga cancel invoice KrisKris, best-effort) |
 | `GET /api/health` | — | `{ok, data:{time, db:"ok", clock_skew_sec, router_last_test}}` |
+| `GET /api/theme` | — | `{ok, data:{brand_name,brand_tagline,accent_color,theme_mode,logo_url}}`; `logo_url` null bila belum ada logo, else `/api/theme/logo?v=<8 hex hash>` |
+| `GET /api/theme/logo` | — | Bytes logo + `Content-Type` asli + `Cache-Control: public,max-age=31536000,immutable` + `ETag`; `404 {ok:false, error}` bila belum ada logo. Rate-limit ringan |
 
 `login_url` = `<hotspot_login_base>?username=<u>&password=<p>` (URL-encoded).
 
@@ -218,7 +232,9 @@ Auth: `POST /api/admin/login {username,password}` → set cookie sesi; `POST /ap
 | `POST /api/admin/walled-garden/bulk` | Tambah banyak host `{hosts[≤100], enabled?}` → `{added, skipped, failed, router_error}`; satu sesi router. Dipakai tag preset UI (Semua, Payment gateway, E-wallet, Bank) |
 | `GET /api/admin/hotspot/login-template` | Unduh `login.html` (attachment) |
 | `GET /api/admin/hotspot/button-snippet` | `{snippet}` — HTML tombol dengan site_url terisi |
-| `GET/PUT /api/admin/settings` | site_url, hotspot_login_base, voucher_length, kredensial kriskris (tulis-saja) |
+| `GET/PUT /api/admin/settings` | site_url, hotspot_login_base, voucher_length, kredensial kriskris (tulis-saja) + field tema opsional: `brand_name` (trim 1..40 char), `brand_tagline` (trim 0..80), `accent_color` (hex `#rrggbb` valid), `theme_mode` (`system\|light\|dark`); validasi ketat, gagal → `400 {ok:false}` |
+| `PUT /api/admin/theme/logo` | Upload logo: multipart field `logo`, PNG/JPEG saja, maks 512KB, dimensi maks 1024px → `200 {ok, data:{logo_url}}` |
+| `DELETE /api/admin/theme/logo` | Hapus logo → `200 {ok}` |
 
 ## 5. Frontend (React)
 
@@ -241,6 +257,8 @@ Route:
 State: `zustand` (sudah ada) untuk sesi admin + cache paket. API client `fetch` + CSRF header otomatis untuk `/api/admin/*`.
 
 Build: `npm run build` di `frontend/` → output dipindah ke `server/web/dist/` → `go build` embed. Dev: Vite proxy `/api` ke Go (`localhost:8080`).
+
+Tema: frontend fetch `GET /api/theme` saat start, cache di `localStorage` (`mikbil-theme`) agar tema tampil instan sebelum fetch selesai. Set atribut `data-theme` (`system|light|dark`) di `<html>`: `system`/absen mengikuti `prefers-color-scheme`, `light`/`dark` mengunci token. `--accent` dari `accent_color`, `--accent-ink` otomatis dari luminance (tanpa dep baru, tanpa `color-mix` CSS). Logo tampil dari `logo_url`; bila null, fallback ikon bawaan (tanpa request tambahan).
 
 ## 6. Integrasi KrisKris (detail implementasi)
 

@@ -52,8 +52,9 @@ func newTestRouter(t *testing.T) http.Handler {
 		Setup: usecase.NewSetupUsecase(admins, conns, set, h, box, connUC, provUC),
 		Auth:  usecase.NewAuthUsecase(admins, sessions, set, h, crypto.RandomBytes),
 		Conn:  connUC, Prof: profUC, Prov: provUC, Hot: hotUC, Allow: allowUC,
-		Pkgs: usecase.NewPackageUsecase(sqlite.NewPackageRepo(db), profUC),
-		Set:  usecase.NewSettingsUsecase(set, box),
+		Pkgs:  usecase.NewPackageUsecase(sqlite.NewPackageRepo(db), profUC),
+		Set:   usecase.NewSettingsUsecase(set, box),
+		Theme: usecase.NewThemeUsecase(set, sqlite.NewThemeRepo(db)),
 	})
 }
 

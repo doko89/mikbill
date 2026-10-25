@@ -27,6 +27,10 @@ type SettingsView struct {
 	KrisKrisAPIKey      string
 	KrisKrisSecretSet   bool
 	KrisKrisCallbackSet bool
+	BrandName           string
+	BrandTagline        string
+	AccentColor         string
+	ThemeMode           string
 }
 
 // SettingsUpdate adalah pembaruan parsial; nil berarti tidak berubah.
@@ -39,6 +43,10 @@ type SettingsUpdate struct {
 	KrisKrisAPIKey         *string
 	KrisKrisAPISecret      *string
 	KrisKrisCallbackSecret *string
+	BrandName              *string
+	BrandTagline           *string
+	AccentColor            *string
+	ThemeMode              *string
 }
 
 // SettingsUsecase menangani baca-tulis pengaturan admin (tech_spec 4.4).
@@ -69,6 +77,10 @@ func (u *SettingsUsecase) Get() (SettingsView, error) {
 		HotspotLoginBase: getSetting(u, domain.SettingHotspotLoginBase),
 		VoucherLength:    defaultVoucherLength,
 		KrisKrisAPIKey:   getSetting(u, domain.SettingKrisKrisAPIKey),
+		BrandName:        orDefault(getSetting(u, domain.SettingBrandName), domain.DefaultBrandName),
+		BrandTagline:     orDefault(getSetting(u, domain.SettingBrandTagline), domain.DefaultBrandTagline),
+		AccentColor:      orDefault(getSetting(u, domain.SettingAccentColor), domain.DefaultAccentColor),
+		ThemeMode:        orDefault(getSetting(u, domain.SettingThemeMode), domain.DefaultThemeMode),
 	}
 	if n, err := strconv.Atoi(strings.TrimSpace(getSetting(u, domain.SettingVoucherLength))); err == nil && n >= minVoucherLength && n <= maxVoucherLength {
 		v.VoucherLength = n
@@ -123,6 +135,9 @@ func (u *SettingsUsecase) Update(in SettingsUpdate) (SettingsView, error) {
 			return SettingsView{}, InputError{s.msg}
 		}
 	}
+	if err := validateThemeUpdate(in, &merged); err != nil {
+		return SettingsView{}, err
+	}
 
 	writes := map[string]string{}
 	if in.DeployMode != nil {
@@ -142,6 +157,18 @@ func (u *SettingsUsecase) Update(in SettingsUpdate) (SettingsView, error) {
 	}
 	if in.KrisKrisAPIKey != nil {
 		writes[domain.SettingKrisKrisAPIKey] = strings.TrimSpace(*in.KrisKrisAPIKey)
+	}
+	if in.BrandName != nil {
+		writes[domain.SettingBrandName] = merged.BrandName
+	}
+	if in.BrandTagline != nil {
+		writes[domain.SettingBrandTagline] = merged.BrandTagline
+	}
+	if in.AccentColor != nil {
+		writes[domain.SettingAccentColor] = merged.AccentColor
+	}
+	if in.ThemeMode != nil {
+		writes[domain.SettingThemeMode] = merged.ThemeMode
 	}
 	for _, s := range []struct {
 		val *string
